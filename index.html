@@ -281,8 +281,8 @@ const S = {
 /* ============================= SUPABASE CONFIG ============================= */
 // Fill these in from your Supabase project's Settings -> API page.
 // The anon/public key is meant to be exposed client-side.
-const SUPABASE_URL = 'YOUR_SUPABASE_URL';
-const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+const SUPABASE_URL = 'https://oqydgtkfdlrysftlhgrs.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9xeWRndGtmZGxyeXNmdGxoZ3JzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3MjY1MzQsImV4cCI6MjEwNDMwMjUzNH0.IM0swQQSyCFU2cTRGOcofv3RoqsVTx72n2e0kDj3jDc';
 const ROOM_SYNC_ENABLED = !SUPABASE_URL.includes('YOUR_SUPABASE_URL') && !SUPABASE_ANON_KEY.includes('YOUR_SUPABASE_ANON_KEY');
 let sbClient = null;
 function getSupabaseClient(){
