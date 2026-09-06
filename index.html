@@ -1036,8 +1036,8 @@ function renderJoinerView(){
     const remaining = Math.max(0, (g.roomDeadline || 0) - Date.now());
     const pct = Math.max(0, (remaining/5000)*100);
     actionArea = `
-      <div class="countdown-wrap"><div class="countdown-bar" style="width:${pct}%"></div></div>
-      <div class="countdown-txt">${(remaining/1000).toFixed(1)}s to bank</div>
+      <div class="countdown-wrap"><div class="countdown-bar" id="joiner-countdown-bar" style="width:${pct}%"></div></div>
+      <div class="countdown-txt" id="joiner-countdown-txt">${(remaining/1000).toFixed(1)}s to bank</div>
       <button class="btn btn-danger" style="width:100%;" data-action="joiner-bank">Bank ${g.roundTotal}</button>
     `;
   } else {
@@ -1179,8 +1179,21 @@ function teardownRoom(){
   S.joinerState = null;
 }
 
-// keeps the joiner's countdown bar and timer text live between state broadcasts
-setInterval(() => { if(S.screen === 'joiner-view' && S.role === 'joiner') render(); }, 250);
+// keeps the joiner's countdown bar and timer text live between state broadcasts,
+// without a full re-render (which would replay the .screen fadeIn animation and flash)
+function joinerCountdownTick(){
+  if(S.screen !== 'joiner-view' || S.role !== 'joiner' || S.myIndex === null) return;
+  const js = S.joinerState;
+  if(!js || !js.game || !js.game.roomPending || !js.game.roomPending.includes(S.myIndex)) return;
+  const bar = document.getElementById('joiner-countdown-bar');
+  const txt = document.getElementById('joiner-countdown-txt');
+  if(!bar || !txt) return;
+  const remaining = Math.max(0, (js.game.roomDeadline || 0) - Date.now());
+  const pct = Math.max(0, (remaining/5000)*100);
+  bar.style.width = pct + '%';
+  txt.textContent = (remaining/1000).toFixed(1) + 's to bank';
+}
+setInterval(joinerCountdownTick, 100);
 
 /* ============================= EVENTS ============================= */
 document.getElementById('app').addEventListener('click', (e) => {
