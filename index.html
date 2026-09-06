@@ -1024,9 +1024,24 @@ function renderJoinerView(){
   }
 
   const g = js.game;
-  const me = js.players[S.myIndex];
   const amIIn = g.inPlayers.includes(S.myIndex);
   const pending = g.roomPending && g.roomPending.includes(S.myIndex);
+
+  const sortedIdx = js.players.map((_,i)=>i).sort((a,b) => js.players[b].gameScore - js.players[a].gameScore);
+  const scoreRows = sortedIdx.map(i => {
+    const p = js.players[i];
+    const isIn = g.inPlayers.includes(i);
+    const isMe = i === S.myIndex;
+    const wouldBe = p.gameScore + (isIn ? g.roundTotal : 0);
+    return `
+    <div class="score-row ${isMe?'active':''} ${!isIn?'banked':''}">
+      <div class="name">${isMe ? '<span class="turn-dot"></span>' : ''}${p.name}${isMe?' (you)':''}</div>
+      <div class="nums">
+        <span class="cur">${p.gameScore}</span>
+        ${isIn && g.roundTotal > 0 ? `<span class="would">→ ${wouldBe}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
   let actionArea;
   if(g.busted){
     actionArea = `<div class="bust-banner">💥 Busted — round total wiped</div>`;
@@ -1055,10 +1070,7 @@ function renderJoinerView(){
       <div class="roundtotal-num">${g.roundTotal}</div>
       <div class="roundtotal-lbl">Round total</div>
     </div>
-    <div class="score-row active" style="margin-bottom:18px;">
-      <div class="name">${me.name} (you)</div>
-      <div class="nums"><span class="cur">${me.gameScore}</span></div>
-    </div>
+    <div class="score-list">${scoreRows}</div>
     <div class="spacer"></div>
     ${actionArea}
   </div>`;
