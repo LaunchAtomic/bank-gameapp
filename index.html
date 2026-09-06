@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Bank</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Space+Mono&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #12212a;
+    --bg-2: #0d1a21;
+    --panel: #1c2f3a;
+    --panel-2: #24404d;
+    --sheet: #2c4753;
+    --accent: #f2a94c;
+    --accent-dim: #c98a3c;
+    --danger: #b1332c;
+    --danger-dim: #5c2320;
+    --text: #edf3f5;
+    --text-dim: #82a0ac;
+    --text-faint: #4d6570;
+    --ink: #14242c;
+    --gold: #f2c14e;
+    --silver: #c7d3d8;
+    --bronze: #c9895a;
+  }
+  *{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    background: radial-gradient(circle at 50% 0%, #1a2e38 0%, var(--bg) 55%, var(--bg-2) 100%);
+    font-family: 'Manrope', system-ui, sans-serif;
+    color: var(--text);
+    display:flex;
+    justify-content:center;
+  }
+  #app{
+    width:100%;
+    max-width:430px;
+    min-height:100vh;
+    position:relative;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+  }
+  .screen{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    padding: 28px 22px 22px;
+    animation: fadeIn .25s ease;
+  }
+  @keyframes fadeIn{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);} }
+  h1,h2,h3{ margin:0; font-weight:800; letter-spacing:-0.01em; }
+  p{ margin:0; }
+
+  /* ---------- top bars ---------- */
+  .topbar{ display:flex; align-items:center; justify-content:space-between; margin-bottom: 18px; }
+  .icon-btn{ background:none; border:none; color:var(--text-dim); font-size:22px; padding:6px; cursor:pointer; line-height:1; }
+  .icon-btn:active{ color:var(--accent); }
+  .brandmark{ display:flex; align-items:center; gap:10px; }
+  .coin{
+    width:30px; height:30px; border-radius:50%;
+    background: linear-gradient(155deg, var(--accent), var(--accent-dim));
+    display:flex; align-items:center; justify-content:center;
+    font-weight:800; color:var(--ink); font-size:15px;
+    box-shadow: 0 2px 0 rgba(0,0,0,.25);
+  }
+  .wordmark{ font-size: 22px; font-weight:800; letter-spacing: 0.02em; }
+
+  /* ---------- buttons ---------- */
+  .btn{
+    border:none; border-radius: 999px; padding: 17px 20px; font-family:inherit;
+    font-weight:800; font-size:17px; cursor:pointer; text-align:center;
+    transition: transform .08s ease;
+  }
+  .btn:active{ transform: scale(.97); }
+  .btn-primary{ background: var(--accent); color: var(--ink); }
+  .btn-primary:disabled{ background:#3a4b52; color:var(--text-faint); }
+  .btn-danger{ background: var(--danger); color: #fff; }
+  .btn-ghost{ background: transparent; color: var(--text-dim); border: 1px solid var(--text-faint); }
+  .btn-row{ display:flex; gap:12px; }
+  .btn-row .btn{ flex:1; }
+
+  /* ---------- setup ---------- */
+  .setup-title{ font-size:30px; margin-bottom:4px; }
+  .setup-sub{ color:var(--text-dim); font-size:14px; margin-bottom:26px; }
+  .field-label{ font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-dim); font-weight:700; margin-bottom:10px; }
+  .field-block{ margin-bottom:26px; }
+  .pill-row{ display:flex; gap:10px; }
+  .pill{
+    flex:1; text-align:center; padding:14px 0; border-radius:14px;
+    background: var(--panel); border: 1.5px solid transparent; color:var(--text-dim);
+    font-weight:800; font-size:16px; cursor:pointer;
+  }
+  .pill.selected{ border-color: var(--accent); color: var(--accent); background: #1f2f38; }
+  .stepper-row{ display:flex; align-items:center; gap:16px; background:var(--panel); border-radius:14px; padding:10px 16px; }
+  .stepper-row .label{ flex:1; font-weight:700; }
+  .stepper-btn{ width:34px; height:34px; border-radius:50%; background:var(--panel-2); color:var(--text); border:none; font-size:18px; font-weight:800; cursor:pointer; }
+  .stepper-val{ min-width: 22px; text-align:center; font-weight:800; font-family:'Space Mono', monospace; }
+  .podium-row{ display:flex; gap:10px; }
+  .podium-chip{ flex:1; background:var(--panel); border-radius:14px; padding:12px 8px; text-align:center; }
+  .podium-chip .place{ font-size:11px; color:var(--text-dim); font-weight:700; margin-bottom:6px; }
+  .podium-chip input{
+    width:100%; background:transparent; border:none; color:var(--accent);
+    font-family:'Space Mono', monospace; font-size:22px; font-weight:700; text-align:center;
+  }
+  .toggle-row{ display:flex; align-items:center; justify-content:space-between; background:var(--panel); border-radius:14px; padding:14px 16px; }
+  .toggle-row .t-label{ font-weight:700; }
+  .toggle-row .t-sub{ font-size:12px; color:var(--text-dim); margin-top:2px; }
+  .switch{ width:48px; height:28px; border-radius:99px; background:#3a4b52; position:relative; cursor:pointer; flex-shrink:0; margin-left:14px; }
+  .switch.on{ background: var(--accent-dim); }
+  .switch .knob{ width:22px; height:22px; border-radius:50%; background:#eef3f5; position:absolute; top:3px; left:3px; transition: left .15s ease; }
+  .switch.on .knob{ left:23px; background:var(--ink); }
+
+  /* ---------- players ---------- */
+  .player-input-row{ display:flex; gap:10px; margin-bottom:20px; }
+  .player-input-row input{
+    flex:1; background:var(--panel); border:none; border-radius:14px; padding:15px 16px;
+    color:var(--text); font-family:inherit; font-size:16px; font-weight:600;
+  }
+  .player-input-row input::placeholder{ color: var(--text-faint); }
+  .add-btn{ width:52px; border-radius:14px; background:var(--accent); color:var(--ink); border:none; font-size:22px; font-weight:800; cursor:pointer; }
+  .player-list{ display:flex; flex-direction:column; gap:10px; margin-bottom:8px; }
+  .player-chip{
+    display:flex; align-items:center; justify-content:space-between; background:var(--panel);
+    border-radius:14px; padding:14px 16px; font-weight:700;
+  }
+  .player-chip .rm{ background:none; border:none; color:var(--text-faint); font-size:18px; cursor:pointer; }
+  .hint{ color: var(--text-dim); font-size:13px; text-align:center; margin: 14px 0; }
+
+  /* ---------- play screen ---------- */
+  .round-tag{ font-size:13px; color:var(--text-dim); font-weight:700; }
+  .round-tag b{ color: var(--text); font-size:15px; display:block; margin-top:2px;}
+  .game-tag{ font-size:11px; color:var(--text-faint); text-transform:uppercase; letter-spacing:.06em; font-weight:700; }
+  .center-stage{ text-align:center; margin: 18px 0 26px; }
+  .roundtotal-num{ font-size: 84px; font-weight:800; line-height:1; color:var(--text); font-family:'Space Mono', monospace; letter-spacing:-2px; }
+  .roundtotal-lbl{ color: var(--text-dim); font-weight:700; font-size:13px; text-transform:uppercase; letter-spacing:.08em; margin-top:6px; }
+  .rollcount-lbl{ color: var(--text-faint); font-size:13px; margin-top:10px; font-weight:600; }
+  .phase-flag{ display:inline-block; margin-top:8px; font-size:11px; font-weight:800; letter-spacing:.05em; padding:4px 10px; border-radius:99px; }
+  .phase-flag.safe{ background:#1f3b2e; color:#7fd9a0; }
+  .phase-flag.risk{ background:var(--danger-dim); color:#ff9d8f; }
+
+  .score-list{ display:flex; flex-direction:column; gap:8px; margin-bottom:18px; }
+  .score-row{
+    display:flex; align-items:center; justify-content:space-between; background:var(--panel);
+    border-radius:14px; padding:14px 16px; border-left:4px solid transparent;
+  }
+  .score-row.active{ border-left-color: var(--accent); background:#233b47; }
+  .score-row.banked{ background: var(--accent); }
+  .score-row.banked .name{ color: var(--ink); font-weight:800; }
+  .score-row.banked .cur{ color: var(--ink); }
+  .score-row .name{ font-weight:700; display:flex; align-items:center; gap:8px; }
+  .turn-dot{ width:8px; height:8px; border-radius:50%; background:var(--accent); }
+  .score-row .nums{ display:flex; align-items:baseline; gap:8px; font-family:'Space Mono', monospace; }
+  .score-row .cur{ font-size:19px; font-weight:700; }
+  .score-row .would{ font-size:13px; color: var(--accent); opacity:.75; font-weight:700; }
+
+  .spacer{ flex:1; }
+  .turn-banner{ text-align:center; color:var(--text-dim); font-weight:700; font-size:14px; margin-bottom:14px; }
+  .turn-banner b{ color:var(--text); }
+
+  /* ---------- bottom sheet ---------- */
+  .sheet-backdrop{
+    position:absolute; inset:0; background: rgba(4,10,13,.55);
+    display:flex; align-items:flex-end; z-index: 20;
+    animation: fadeIn .2s ease;
+  }
+  .sheet{
+    width:100%; background: var(--sheet); border-radius: 26px 26px 0 0;
+    padding: 10px 22px 30px; box-shadow: 0 -10px 40px rgba(0,0,0,.4);
+  }
+  .sheet-handle{ width:40px; height:5px; background: rgba(255,255,255,.2); border-radius:99px; margin: 6px auto 18px; }
+  .sheet-title{ text-align:center; font-size:20px; font-weight:800; margin-bottom: 22px; }
+
+  .pad-grid{ display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; margin-bottom: 4px; }
+  .pad-tile{
+    aspect-ratio: 1 / 1.05; border-radius:16px; background: var(--accent); color:var(--ink);
+    display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:800;
+    border:none; cursor:pointer; font-family:'Space Mono', monospace;
+  }
+  .pad-tile.danger{ background: var(--danger); color:#fff; }
+  .pad-tile.disabled{ background: rgba(255,255,255,.06); color: rgba(255,255,255,.25); pointer-events:none; }
+  .pad-tile.chosen{ box-shadow: 0 0 0 3px rgba(237,243,245,.65) inset; transform: scale(.96); }
+  .pad-tile.inactive{ opacity:.35; pointer-events:none; }
+  .pad-tile.doubles{ font-family:'Manrope',sans-serif; font-size:15px; text-align:center; line-height:1.15; }
+  .pad-tile.doubles.disabled{ background: rgba(255,255,255,.06); }
+
+  .decision-row{ display:flex; gap:12px; }
+  .decision-row .btn{ flex:1; }
+
+  .roomdecide-list{ display:flex; flex-direction:column; gap:10px; margin-bottom: 18px; }
+  .roomdecide-row{
+    display:flex; align-items:center; justify-content:space-between; background:var(--panel-2);
+    border-radius:14px; padding:12px 14px;
+  }
+  .roomdecide-row.done{ opacity:.45; }
+  .roomdecide-row .who{ display:flex; flex-direction:column; }
+  .roomdecide-row .who .nm{ font-weight:700; }
+  .roomdecide-row .who .ww{ font-size:12px; color:var(--accent); font-weight:700; font-family:'Space Mono', monospace; }
+  .roomdecide-row button{
+    background: var(--accent); color:var(--ink); border:none; border-radius:99px;
+    padding:9px 18px; font-weight:800; font-family:inherit; font-size:14px; cursor:pointer;
+  }
+  .roomdecide-row .status{ font-size:12px; font-weight:800; color:var(--text-faint); text-transform:uppercase; }
+  .countdown-wrap{ background: rgba(255,255,255,.08); height:6px; border-radius:99px; overflow:hidden; margin-bottom:16px; }
+  .countdown-bar{ height:100%; background: var(--accent); width:100%; transition: width .1s linear; }
+  .countdown-txt{ text-align:center; font-size:12px; color:var(--text-dim); font-weight:700; margin-bottom:16px; font-family:'Space Mono', monospace; }
+
+  .result-list{ display:flex; flex-direction:column; gap:9px; margin-bottom:22px; }
+  .result-row{ display:flex; justify-content:space-between; align-items:center; background:var(--panel-2); border-radius:12px; padding:12px 14px; }
+  .result-row .delta{ font-family:'Space Mono', monospace; font-weight:700; }
+  .result-row .delta.zero{ color: var(--text-faint); }
+  .result-row .delta.pos{ color:#7fd9a0; }
+  .bust-banner{ text-align:center; color:#ff9d8f; font-weight:800; font-size:15px; margin-bottom:16px; letter-spacing:.02em; }
+
+  .bank-row{
+    display:flex; align-items:center; justify-content:space-between; padding: 18px 4px;
+    border-bottom: 1px solid rgba(255,255,255,.06); cursor:pointer;
+  }
+  .bank-row:last-child{ border-bottom:none; }
+  .bank-row .nm{ font-size:19px; font-weight:600; }
+  .checkbox{ width:26px; height:26px; border-radius:7px; border: 2px solid var(--text-dim); flex-shrink:0; position:relative; }
+  .checkbox.checked{ background: var(--accent); border-color: var(--accent); }
+  .checkbox.checked::after{
+    content:''; position:absolute; left:7px; top:2px; width:7px; height:13px;
+    border-right:3px solid var(--ink); border-bottom:3px solid var(--ink); transform: rotate(45deg);
+  }
+
+  /* ---------- game over / standings ---------- */
+  .rank-list{ display:flex; flex-direction:column; gap:10px; margin-bottom:22px; }
+  .rank-row{ display:flex; align-items:center; gap:14px; background:var(--panel); border-radius:14px; padding:14px 16px; }
+  .rank-medal{ width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:14px; color:var(--ink); flex-shrink:0; }
+  .rank-medal.p1{ background: var(--gold); }
+  .rank-medal.p2{ background: var(--silver); }
+  .rank-medal.p3{ background: var(--bronze); }
+  .rank-medal.pn{ background: var(--panel-2); color:var(--text-dim); }
+  .rank-info{ flex:1; }
+  .rank-info .nm{ font-weight:700; }
+  .rank-info .pts{ font-size:12px; color:var(--text-dim); font-weight:700; }
+  .rank-score{ font-family:'Space Mono', monospace; font-weight:800; font-size:20px; }
+  .rank-award{ font-family:'Space Mono', monospace; font-weight:800; font-size:14px; color:var(--accent); min-width:34px; text-align:right; }
+
+  .champion-block{ text-align:center; margin: 10px 0 28px; }
+  .champion-block .crown{ font-size:44px; margin-bottom:6px; }
+  .champion-block .cname{ font-size:28px; font-weight:800; }
+  .champion-block .csub{ color:var(--text-dim); font-size:13px; margin-top:4px; font-weight:600; }
+
+  ::selection{ background: var(--accent); color:var(--ink); }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+/* ============================= STATE ============================= */
+const S = {
+  screen: 'setup', // setup | players | play | matchboard
+  settings: { roundsPerGame: 7, gamesInMatch: 3, podium: [4,2,1], roomMode: false },
+  playerNames: [],
+  players: [],       // {name, matchPoints, gameScore}
+  match: { gameIndex: 0, history: [] }, // history: [{gameNum, awards:[{name,score,points}]}]
+  game: null,        // active game state
+  sheet: null,       // 'roll' | 'roomroll' | 'roomdecide' | 'roundresult' | 'bankselect'
+  roomTimer: null,
+  boardReturnTo: null,
+  bankSelection: null // Set of player indices checked in the bank-select sheet
+};
+
+function newPlayerName(v){ return v.trim(); }
+
+/* ============================= GAME HELPERS ============================= */
+function startMatch(){
+  S.players = S.playerNames.map(n => ({ name:n, matchPoints:0, gameScore:0 }));
+  S.match = { gameIndex: 0, history: [] };
+  startGame();
+}
+function startGame(){
+  S.players.forEach(p => p.gameScore = 0);
+  S.game = { round:1, roundTotal:0, rollCount:0, busted:false, turnIdx:0, inPlayers: S.players.map((_,i)=>i), roundEvents:null };
+  S.screen = 'play';
+  render();
+}
+function startRound(){
+  S.game.round += 1;
+  resetRoundState();
+  render();
+}
+function resetRoundState(){
+  S.game.roundTotal = 0;
+  S.game.rollCount = 0;
+  S.game.busted = false;
+  S.game.inPlayers = S.players.map((_,i)=>i);
+  S.game.turnIdx = 0;
+}
+function upcomingPhase(){ return (S.game.rollCount + 1) <= 3 ? 'safe' : 'risk'; }
+
+function applyRoll(val){
+  const g = S.game;
+  g.rollCount += 1;
+  const phase = g.rollCount <= 3 ? 'safe' : 'risk';
+  let bust = false;
+  if(val === 'doubles'){
+    g.roundTotal = g.roundTotal * 2;
+  } else {
+    const sum = val;
+    if(phase === 'safe'){
+      g.roundTotal += (sum === 7 ? 70 : sum);
+    } else {
+      if(sum === 7){ bust = true; }
+      else { g.roundTotal += sum; }
+    }
+  }
+  if(bust){
+    handleBust();
+  } else {
+    return true;
+  }
+  return !bust;
+}
+
+function handleBust(){
+  const g = S.game;
+  g.busted = true;
+  S.sheet = 'roundresult';
+  render();
+}
+
+function bankPlayer(idx){
+  const g = S.game;
+  const p = S.players[idx];
+  p.gameScore += g.roundTotal;
+  g.inPlayers = g.inPlayers.filter(i => i !== idx);
+  if(g.inPlayers.length === 0){
+    S.sheet = 'roundresult';
+    render();
+  } else {
+    if(g.turnIdx >= g.inPlayers.length) g.turnIdx = 0;
+    render();
+  }
+}
+
+function bankPlayers(idxSet){
+  const g = S.game;
+  idxSet.forEach(idx => {
+    const p = S.players[idx];
+    p.gameScore += g.roundTotal;
+  });
+  g.inPlayers = g.inPlayers.filter(i => !idxSet.has(i));
+  if(g.inPlayers.length === 0){
+    S.sheet = 'roundresult';
+  } else {
+    if(g.turnIdx >= g.inPlayers.length) g.turnIdx = 0;
+    S.sheet = null;
+  }
+  render();
+}
+
+function advanceAfterRoll(){
+  const g = S.game;
+  if(g.inPlayers.length > 1){
+    g.turnIdx = (g.turnIdx + 1) % g.inPlayers.length;
+  }
+  render(); // sheet stays open — title/pad refresh with the new turn + phase
+}
+
+function animateNumber(el, from, to, duration){
+  if(!el) return;
+  if(from === to){ el.textContent = to; return; }
+  duration = duration || 550;
+  const start = performance.now();
+  function tick(now){
+    const t = Math.min(1, (now - start) / duration);
+    const eased = 1 - Math.pow(1 - t, 3);
+    el.textContent = Math.round(from + (to - from) * eased);
+    if(t < 1) requestAnimationFrame(tick);
+    else el.textContent = to;
+  }
+  requestAnimationFrame(tick);
+}
+
+function closeRoundResultAndContinue(){
+  S.sheet = null;
+  if(S.game.round < S.settings.roundsPerGame){
+    startRound();
+  } else {
+    endGame();
+  }
+}
+
+function endGame(){
+  const ranked = [...S.players].sort((a,b)=> b.gameScore - a.gameScore);
+  const awards = ranked.map((p,i) => {
+    const pts = i < S.settings.podium.length ? S.settings.podium[i] : 0;
+    p.matchPoints += pts;
+    return { name: p.name, score: p.gameScore, points: pts };
+  });
+  S.match.history.push({ gameNum: S.match.gameIndex + 1, awards });
+  S.screen = 'gameover';
+  render();
+}
+
+function nextGameOrFinish(){
+  S.match.gameIndex += 1;
+  if(S.match.gameIndex < S.settings.gamesInMatch){
+    startGame();
+  } else {
+    S.screen = 'matchover';
+    render();
+  }
+}
+
+/* ============================= ROOM MODE ============================= */
+function roomOpenRollPad(){
+  S.sheet = 'roomroll';
+  render();
+}
+function roomApplyRoll(val){
+  const oldTotal = S.game.roundTotal;
+  const ok = applyRoll(val);
+  if(ok){
+    roomStartDecisionPhase();
+    const el = document.querySelector('.roundtotal-num');
+    animateNumber(el, oldTotal, S.game.roundTotal);
+  }
+}
+function roomStartDecisionPhase(){
+  const g = S.game;
+  g.roomPending = new Set(g.inPlayers);
+  g.roomDeadline = Date.now() + 5000;
+  S.sheet = 'roomdecide';
+  render();
+  clearInterval(S.roomTimer);
+  S.roomTimer = setInterval(roomTick, 100);
+}
+function roomTick(){
+  const g = S.game;
+  const remaining = g.roomDeadline - Date.now();
+  if(remaining <= 0){
+    clearInterval(S.roomTimer);
+    roomFinishDecisionPhase();
+  } else {
+    renderRoomDecideSheetOnly(remaining);
+  }
+}
+function roomBank(idx){
+  const g = S.game;
+  if(!g.roomPending.has(idx)) return;
+  g.roomPending.delete(idx);
+  const p = S.players[idx];
+  p.gameScore += g.roundTotal;
+  g.inPlayers = g.inPlayers.filter(i => i !== idx);
+  render();
+  if(g.roomPending.size === 0){
+    clearInterval(S.roomTimer);
+    roomFinishDecisionPhase();
+  }
+}
+function roomFinishDecisionPhase(){
+  const g = S.game;
+  g.roomPending = null;
+  if(g.inPlayers.length === 0){
+    S.sheet = 'roundresult';
+    render();
+  } else {
+    S.sheet = null;
+    render();
+  }
+}
+
+/* ============================= RENDER ROOT ============================= */
+function render(){
+  const app = document.getElementById('app');
+  let html = '';
+  if(S.screen === 'setup') html = renderSetup();
+  else if(S.screen === 'players') html = renderPlayers();
+  else if(S.screen === 'play') html = renderPlay();
+  else if(S.screen === 'gameover') html = renderGameOver();
+  else if(S.screen === 'matchboard') html = renderMatchBoard();
+  else if(S.screen === 'matchover') html = renderMatchOver();
+  app.innerHTML = html;
+
+  if(S.sheet){
+    app.insertAdjacentHTML('beforeend', renderSheet());
+  }
+  saveState();
+}
+
+/* ============================= PERSISTENCE ============================= */
+const STORAGE_KEY = 'bank_game_autosave_v1';
+
+function saveState(){
+  try{
+    const g = S.game;
+    const gameOut = g ? { ...g, roomPending: g.roomPending ? Array.from(g.roomPending) : null } : null;
+    const payload = {
+      screen: S.screen,
+      settings: S.settings,
+      playerNames: S.playerNames,
+      players: S.players,
+      match: S.match,
+      game: gameOut
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  } catch(e){ /* storage unavailable — fail silently, game still works this session */ }
+}
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return null;
+    return JSON.parse(raw);
+  } catch(e){ return null; }
+}
+
+function clearSavedState(){
+  try{ localStorage.removeItem(STORAGE_KEY); } catch(e){ /* ignore */ }
+}
+
+function restoreFromSave(){
+  const saved = loadState();
+  if(!saved || !saved.screen || saved.screen === 'setup') return false;
+  S.screen = saved.screen;
+  S.settings = saved.settings || S.settings;
+  S.playerNames = saved.playerNames || [];
+  S.players = saved.players || [];
+  S.match = saved.match || S.match;
+  if(saved.game){
+    S.game = { ...saved.game, roomPending: null }; // never resume mid room-decision countdown
+  }
+  S.sheet = null; // always resume to the base screen, never mid-modal
+  return true;
+}
+
+window.addEventListener('beforeunload', function(e){
+  if(S.screen === 'play' || S.screen === 'gameover' || S.screen === 'matchboard'){
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
+
+/* ============================= SETUP SCREEN ============================= */
+function renderSetup(){
+  const st = S.settings;
+  const roundsOpts = [5,7,10];
+  const gamesOpts = [1,3,5,7];
+  return `
+  <div class="screen">
+    <div class="brandmark" style="margin-bottom:22px;">
+      <div class="coin">$</div>
+      <div class="wordmark">BANK</div>
+    </div>
+    <div class="setup-title">New match</div>
+    <div class="setup-sub">Set the rules, then add your players.</div>
+
+    <div class="field-block">
+      <div class="field-label">Rounds per game</div>
+      <div class="pill-row">
+        ${roundsOpts.map(n => `<div class="pill ${st.roundsPerGame===n?'selected':''}" data-action="set-rounds" data-arg="${n}">${n}</div>`).join('')}
+      </div>
+    </div>
+
+    <div class="field-block">
+      <div class="field-label">Games in match</div>
+      <div class="pill-row">
+        ${gamesOpts.map(n => `<div class="pill ${st.gamesInMatch===n?'selected':''}" data-action="set-games" data-arg="${n}">${n}</div>`).join('')}
+      </div>
+    </div>
+
+    <div class="field-block">
+      <div class="field-label">Podium points</div>
+      <div class="podium-row">
+        <div class="podium-chip"><div class="place">1st</div><input type="number" min="0" value="${st.podium[0]}" data-action="set-podium" data-arg="0"></div>
+        <div class="podium-chip"><div class="place">2nd</div><input type="number" min="0" value="${st.podium[1]}" data-action="set-podium" data-arg="1"></div>
+        <div class="podium-chip"><div class="place">3rd</div><input type="number" min="0" value="${st.podium[2]}" data-action="set-podium" data-arg="2"></div>
+      </div>
+    </div>
+
+    <div class="field-block">
+      <div class="toggle-row">
+        <div>
+          <div class="t-label">Room mode</div>
+          <div class="t-sub">Everyone banks blind on their own phone, 5s to decide</div>
+        </div>
+        <div class="switch ${st.roomMode?'on':''}" data-action="toggle-room"><div class="knob"></div></div>
+      </div>
+    </div>
+
+    <div class="spacer"></div>
+    <button class="btn btn-primary" data-action="goto-players">Add players</button>
+  </div>`;
+}
+
+/* ============================= PLAYERS SCREEN ============================= */
+function renderPlayers(){
+  const n = S.playerNames.length;
+  return `
+  <div class="screen">
+    <div class="topbar">
+      <button class="icon-btn" data-action="back-to-setup">‹</button>
+      <div class="wordmark" style="font-size:18px;">Add players</div>
+      <div style="width:28px;"></div>
+    </div>
+
+    <div class="player-input-row">
+      <input id="player-name-input" type="text" placeholder="Player name" maxlength="20" data-action="noop">
+      <button class="add-btn" data-action="add-player">+</button>
+    </div>
+
+    <div class="player-list">
+      ${S.playerNames.map((name,i) => `
+        <div class="player-chip">
+          <span>${name}</span>
+          <button class="rm" data-action="remove-player" data-arg="${i}">✕</button>
+        </div>`).join('')}
+    </div>
+
+    ${n < 2 ? `<div class="hint">Add 2 or more players</div>` : ''}
+
+    <div class="spacer"></div>
+    <button class="btn btn-primary" data-action="start-match" ${n < 2 ? 'disabled' : ''}>Start match</button>
+  </div>`;
+}
+
+/* ============================= PLAY SCREEN ============================= */
+function renderPlay(){
+  const g = S.game;
+  const st = S.settings;
+  const nextPhase = upcomingPhase();
+  const activeIdx = (!S.sheet && !st.roomMode && g.inPlayers.length) ? g.inPlayers[g.turnIdx] : null;
+
+  const sortedIdx = S.players.map((_,i)=>i).sort((a,b)=> S.players[b].gameScore - S.players[a].gameScore);
+  const rows = sortedIdx.map(i => {
+    const p = S.players[i];
+    const isIn = g.inPlayers.includes(i);
+    const isActive = activeIdx === i;
+    const wouldBe = p.gameScore + (isIn ? g.roundTotal : 0);
+    return `
+    <div class="score-row ${isActive?'active':''} ${!isIn?'banked':''}">
+      <div class="name">${isActive ? '<span class="turn-dot"></span>' : ''}${p.name}</div>
+      <div class="nums">
+        <span class="cur">${p.gameScore}</span>
+        ${isIn && g.roundTotal > 0 ? `<span class="would">→ ${wouldBe}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  const activePlayer = activeIdx !== null ? S.players[activeIdx] : null;
+
+  return `
+  <div class="screen">
+    <div class="topbar">
+      <button class="icon-btn" data-action="reset-match" title="Reset match">↺</button>
+      <div class="game-tag">Game ${S.match.gameIndex+1} of ${st.gamesInMatch}</div>
+      <button class="icon-btn" data-action="open-matchboard">◧</button>
+    </div>
+    <div class="round-tag" style="margin-bottom:2px;">Round<b>${g.round}/${st.roundsPerGame}</b></div>
+
+    <div class="center-stage">
+      <div class="roundtotal-num">${g.roundTotal}</div>
+      <div class="roundtotal-lbl">Round total</div>
+      <div class="rollcount-lbl">Roll ${g.rollCount}</div>
+      <div class="phase-flag ${nextPhase}">${nextPhase === 'safe' ? 'Safe · 7 pays 70' : 'Risk · 7 busts'}</div>
+    </div>
+
+    <div class="score-list">${rows}</div>
+
+    <div class="spacer"></div>
+
+    ${st.roomMode ? `
+      <div class="turn-banner">Waiting for the next roll — everyone banks on their own</div>
+      <button class="btn btn-primary" data-action="room-open-roll">Roll</button>
+    ` : `
+      <div class="turn-banner"><b>${activePlayer ? activePlayer.name : ''}</b>'s turn</div>
+      <div class="decision-row">
+        <button class="btn btn-primary" data-action="open-roll-pad">Roll</button>
+        <button class="btn btn-danger" data-action="open-bank-select">Bank</button>
+      </div>
+    `}
+  </div>`;
+}
+
+/* ============================= PAD BUILDER (shared) ============================= */
+function padGridHtml(onRoll){
+  const phase = upcomingPhase();
+  const tiles = [2,3,4,5,6,7,8,9,10,11,12];
+  let html = '<div class="pad-grid">';
+  tiles.forEach(n => {
+    let cls = 'pad-tile';
+    let disabled = false;
+    if(n === 7 && phase === 'risk') cls += ' danger';
+    if((n === 2 || n === 12) && phase === 'risk') disabled = true;
+    if(disabled) cls += ' disabled';
+    html += `<button class="${cls}" data-action="${onRoll}" data-arg="${n}">${n}</button>`;
+  });
+  const doublesDisabled = phase === 'safe';
+  html += `<button class="pad-tile doubles ${doublesDisabled?'disabled':''}" data-action="${onRoll}" data-arg="doubles">Doubles!</button>`;
+  html += '</div>';
+  return html;
+}
+
+/* ============================= SHEETS ============================= */
+function renderSheet(){
+  if(S.sheet === 'roll'){
+    const g = S.game;
+    const activeIdx = g.inPlayers[g.turnIdx];
+    const activeName = S.players[activeIdx].name;
+    return `
+    <div class="sheet-backdrop" data-action="dismiss-sheet">
+      <div class="sheet" data-action="noop">
+        <div class="sheet-handle"></div>
+        <div class="sheet-title">${activeName}'s roll</div>
+        ${padGridHtml('enter-roll')}
+      </div>
+    </div>`;
+  }
+  if(S.sheet === 'roomroll'){
+    return `
+    <div class="sheet-backdrop" data-action="dismiss-sheet">
+      <div class="sheet" data-action="noop">
+        <div class="sheet-handle"></div>
+        <div class="sheet-title">Enter the roll</div>
+        ${padGridHtml('room-enter-roll')}
+      </div>
+    </div>`;
+  }
+  if(S.sheet === 'roomdecide'){
+    return `<div class="sheet-backdrop" data-action="noop"><div class="sheet" id="room-decide-sheet">${roomDecideInner(5000)}</div></div>`;
+  }
+  if(S.sheet === 'roundresult'){
+    return renderRoundResultSheet();
+  }
+  if(S.sheet === 'bankselect'){
+    return renderBankSelectSheet();
+  }
+  return '';
+}
+
+function renderBankSelectSheet(){
+  const g = S.game;
+  const rows = g.inPlayers.map(idx => {
+    const p = S.players[idx];
+    const checked = S.bankSelection.has(idx);
+    return `
+    <div class="bank-row" data-action="toggle-bank-select" data-arg="${idx}">
+      <span class="nm">${p.name}</span>
+      <span class="checkbox ${checked?'checked':''}"></span>
+    </div>`;
+  }).join('');
+  return `
+  <div class="sheet-backdrop" data-action="dismiss-sheet">
+    <div class="sheet" data-action="noop">
+      <div class="sheet-handle"></div>
+      <div>${rows}</div>
+      <div style="height:22px;"></div>
+      <button class="btn btn-primary" data-action="confirm-bank-select" style="width:100%">Done</button>
+    </div>
+  </div>`;
+}
+
+function roomDecideInner(remainingMs){
+  const g = S.game;
+  const pct = Math.max(0, (remainingMs/5000)*100);
+  const secs = Math.max(0, (remainingMs/1000)).toFixed(1);
+  const rows = g.inPlayers.map(idx => {
+    const p = S.players[idx];
+    const pending = g.roomPending && g.roomPending.has(idx);
+    const wouldBe = p.gameScore + g.roundTotal;
+    return `
+    <div class="roomdecide-row ${pending?'':'done'}">
+      <div class="who">
+        <span class="nm">${p.name}</span>
+        <span class="ww">${p.gameScore} → ${wouldBe}</span>
+      </div>
+      ${pending ? `<button data-action="room-bank" data-arg="${idx}">Bank</button>` : `<span class="status">Staying</span>`}
+    </div>`;
+  }).join('');
+  return `
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">Round total: ${g.roundTotal}</div>
+    <div class="countdown-wrap"><div class="countdown-bar" style="width:${pct}%"></div></div>
+    <div class="countdown-txt">${secs}s to bank — no action keeps you in</div>
+    <div class="roomdecide-list">${rows}</div>
+  `;
+}
+
+function renderRoomDecideSheetOnly(remainingMs){
+  const el = document.getElementById('room-decide-sheet');
+  if(el) el.innerHTML = roomDecideInner(remainingMs);
+}
+
+function renderRoundResultSheet(){
+  const g = S.game;
+  if(g.busted){
+    const rows = g.inPlayers.map(idx => {
+      const p = S.players[idx];
+      return `<div class="result-row"><span>${p.name}</span><span class="delta zero">+0</span></div>`;
+    }).join('');
+    const bankedRows = S.players.filter((p,i)=>!g.inPlayers.includes(i)).map(p =>
+      `<div class="result-row"><span>${p.name}</span><span class="delta pos">banked earlier</span></div>`
+    ).join('');
+    return `
+    <div class="sheet-backdrop" data-action="noop">
+      <div class="sheet">
+        <div class="sheet-handle"></div>
+        <div class="bust-banner">💥 Busted on 7 — round total wiped</div>
+        <div class="result-list">${rows}${bankedRows}</div>
+        <button class="btn btn-primary" data-action="round-result-continue" style="width:100%">Continue</button>
+      </div>
+    </div>`;
+  } else {
+    const rows = S.players.map((p,i) => {
+      return `<div class="result-row"><span>${p.name}</span><span class="delta pos">${p.gameScore}</span></div>`;
+    }).join('');
+    return `
+    <div class="sheet-backdrop" data-action="noop">
+      <div class="sheet">
+        <div class="sheet-handle"></div>
+        <div class="sheet-title">Round ${g.round} complete</div>
+        <div class="result-list">${rows}</div>
+        <button class="btn btn-primary" data-action="round-result-continue" style="width:100%">Continue</button>
+      </div>
+    </div>`;
+  }
+}
+
+/* ============================= GAME OVER SCREEN ============================= */
+function renderGameOver(){
+  const last = S.match.history[S.match.history.length - 1];
+  const isLastGame = (S.match.gameIndex + 1) >= S.settings.gamesInMatch;
+  const rows = last.awards.map((a,i) => {
+    const medalCls = i===0?'p1':i===1?'p2':i===2?'p3':'pn';
+    return `
+    <div class="rank-row">
+      <div class="rank-medal ${medalCls}">${i+1}</div>
+      <div class="rank-info">
+        <div class="nm">${a.name}</div>
+        <div class="pts">${a.score} pts this game</div>
+      </div>
+      <div class="rank-award">+${a.points}</div>
+    </div>`;
+  }).join('');
+  return `
+  <div class="screen">
+    <div class="topbar">
+      <div style="width:28px;"></div>
+      <div class="wordmark" style="font-size:18px;">Game ${last.gameNum} complete</div>
+      <div style="width:28px;"></div>
+    </div>
+    <div class="rank-list">${rows}</div>
+    <div class="spacer"></div>
+    <button class="btn btn-primary" data-action="to-matchboard-from-gameover">${isLastGame ? 'See final results' : 'View match standings'}</button>
+  </div>`;
+}
+
+/* ============================= MATCH SCOREBOARD ============================= */
+function renderMatchBoard(){
+  const ranked = [...S.players].sort((a,b)=> b.matchPoints - a.matchPoints);
+  const isLastGame = S.match.gameIndex >= S.settings.gamesInMatch;
+  const rows = ranked.map((p,i) => {
+    const medalCls = i===0?'p1':i===1?'p2':i===2?'p3':'pn';
+    return `
+    <div class="rank-row">
+      <div class="rank-medal ${medalCls}">${i+1}</div>
+      <div class="rank-info">
+        <div class="nm">${p.name}</div>
+        <div class="pts">after ${S.match.history.length} of ${S.settings.gamesInMatch} games</div>
+      </div>
+      <div class="rank-score">${p.matchPoints}</div>
+    </div>`;
+  }).join('');
+  return `
+  <div class="screen">
+    <div class="topbar">
+      <button class="icon-btn" data-action="close-matchboard">‹</button>
+      <div class="wordmark" style="font-size:18px;">Match standings</div>
+      <div style="width:28px;"></div>
+    </div>
+    <div class="rank-list">${rows}</div>
+    <div class="spacer"></div>
+    <button class="btn btn-primary" data-action="matchboard-continue">${S.match.gameIndex < S.settings.gamesInMatch ? 'Start next game' : 'Final results'}</button>
+  </div>`;
+}
+
+/* ============================= MATCH OVER ============================= */
+function renderMatchOver(){
+  const ranked = [...S.players].sort((a,b)=> b.matchPoints - a.matchPoints);
+  const champ = ranked[0];
+  const rows = ranked.map((p,i) => {
+    const medalCls = i===0?'p1':i===1?'p2':i===2?'p3':'pn';
+    return `
+    <div class="rank-row">
+      <div class="rank-medal ${medalCls}">${i+1}</div>
+      <div class="rank-info"><div class="nm">${p.name}</div></div>
+      <div class="rank-score">${p.matchPoints}</div>
+    </div>`;
+  }).join('');
+  return `
+  <div class="screen">
+    <div class="topbar"><div style="width:28px;"></div><div class="wordmark" style="font-size:18px;">Match complete</div><div style="width:28px;"></div></div>
+    <div class="champion-block">
+      <div class="crown">🏆</div>
+      <div class="cname">${champ.name}</div>
+      <div class="csub">Match champion · ${champ.matchPoints} points</div>
+    </div>
+    <div class="rank-list">${rows}</div>
+    <div class="spacer"></div>
+    <button class="btn btn-primary" data-action="new-match">New match</button>
+  </div>`;
+}
+
+/* ============================= EVENTS ============================= */
+document.getElementById('app').addEventListener('click', (e) => {
+  const el = e.target.closest('[data-action]');
+  if(!el) return;
+  const action = el.dataset.action;
+  const arg = el.dataset.arg;
+
+  switch(action){
+    case 'set-rounds': S.settings.roundsPerGame = parseInt(arg); render(); break;
+    case 'set-games': S.settings.gamesInMatch = parseInt(arg); render(); break;
+    case 'toggle-room': S.settings.roomMode = !S.settings.roomMode; render(); break;
+    case 'goto-players': S.screen = 'players'; render(); break;
+    case 'back-to-setup': S.screen = 'setup'; render(); break;
+
+    case 'add-player': {
+      const input = document.getElementById('player-name-input');
+      const v = newPlayerName(input.value || '');
+      if(v){ S.playerNames.push(v); render(); }
+      break;
+    }
+    case 'remove-player': S.playerNames.splice(parseInt(arg),1); render(); break;
+    case 'start-match': if(S.playerNames.length >= 2){ startMatch(); } break;
+
+    case 'open-matchboard': S.boardReturnTo = 'play'; S.screen = 'matchboard'; render(); break;
+    case 'close-matchboard': S.screen = 'play'; render(); break;
+
+    case 'open-roll-pad':
+      S.sheet = 'roll';
+      render();
+      break;
+    case 'enter-roll': {
+      const oldTotal = S.game.roundTotal;
+      const val = arg === 'doubles' ? 'doubles' : parseInt(arg);
+      const ok = applyRoll(val);
+      if(ok){
+        advanceAfterRoll();
+        const el = document.querySelector('.roundtotal-num');
+        animateNumber(el, oldTotal, S.game.roundTotal);
+      }
+      // if a bust occurred, handleBust() already swapped the sheet to the round result
+      break;
+    }
+    case 'dismiss-sheet': {
+      if(S.sheet === 'roll' || S.sheet === 'roomroll'){
+        S.sheet = null;
+        render();
+      } else if(S.sheet === 'bankselect'){
+        S.bankSelection = null;
+        S.sheet = null;
+        render();
+      }
+      break;
+    }
+    case 'open-bank-select': {
+      S.bankSelection = new Set();
+      S.sheet = 'bankselect';
+      render();
+      break;
+    }
+    case 'toggle-bank-select': {
+      const idx = parseInt(arg);
+      if(S.bankSelection.has(idx)) S.bankSelection.delete(idx);
+      else S.bankSelection.add(idx);
+      render();
+      break;
+    }
+    case 'confirm-bank-select': {
+      const chosen = S.bankSelection;
+      S.bankSelection = null;
+      if(chosen.size > 0){ bankPlayers(chosen); }
+      else { S.sheet = null; render(); }
+      break;
+    }
+
+    case 'room-open-roll': roomOpenRollPad(); break;
+    case 'room-enter-roll': {
+      const val = arg === 'doubles' ? 'doubles' : parseInt(arg);
+      roomApplyRoll(val);
+      break;
+    }
+    case 'room-bank': roomBank(parseInt(arg)); break;
+
+    case 'round-result-continue': closeRoundResultAndContinue(); break;
+
+    case 'to-matchboard-from-gameover': S.screen = 'matchboard'; render(); break;
+    case 'matchboard-continue': nextGameOrFinish(); break;
+    case 'new-match': clearSavedState(); S.screen = 'setup'; S.playerNames = []; S.players = []; S.match = { gameIndex:0, history:[] }; S.game = null; render(); break;
+
+    case 'reset-match': {
+      if(window.confirm('Reset this match? Everyone\'s scores will be lost.')){
+        clearSavedState();
+        S.screen = 'setup';
+        S.playerNames = [];
+        S.players = [];
+        S.match = { gameIndex:0, history:[] };
+        S.game = null;
+        render();
+      }
+      break;
+    }
+    case 'noop': break;
+  }
+});
+
+document.getElementById('app').addEventListener('input', (e) => {
+  const el = e.target.closest('[data-action="set-podium"]');
+  if(el){
+    const idx = parseInt(el.dataset.arg);
+    S.settings.podium[idx] = parseInt(el.value || '0');
+  }
+});
+
+document.getElementById('app').addEventListener('keydown', (e) => {
+  if(e.target.id === 'player-name-input' && e.key === 'Enter'){
+    e.preventDefault();
+    const v = newPlayerName(e.target.value || '');
+    if(v){ S.playerNames.push(v); render(); }
+  }
+});
+
+restoreFromSave();
+render();
+</script>
+</body>
+</html>
