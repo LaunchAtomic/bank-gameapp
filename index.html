@@ -134,6 +134,7 @@
   .round-tag{ font-size:13px; color:var(--text-dim); font-weight:700; }
   .round-tag b{ color: var(--text); font-size:15px; display:block; margin-top:2px;}
   .game-tag{ font-size:11px; color:var(--text-faint); text-transform:uppercase; letter-spacing:.06em; font-weight:700; }
+  .room-code-badge{ text-align:center; font-family:'Space Mono', monospace; font-weight:800; letter-spacing:.08em; color:var(--accent); font-size:12px; margin-bottom:10px; }
   .center-stage{ text-align:center; margin: 18px 0 26px; }
   .roundtotal-num{ font-size: 84px; font-weight:800; line-height:1; color:var(--text); font-family:'Space Mono', monospace; letter-spacing:-2px; }
   .roundtotal-lbl{ color: var(--text-dim); font-weight:700; font-size:13px; text-transform:uppercase; letter-spacing:.08em; margin-top:6px; }
@@ -252,10 +253,11 @@
 </head>
 <body>
 <div id="app"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 /* ============================= STATE ============================= */
 const S = {
-  screen: 'setup', // setup | players | play | matchboard
+  screen: 'setup', // setup | players | play | matchboard | join-code | join-claim | joiner-view
   settings: { roundsPerGame: 7, gamesInMatch: 3, podium: [4,2,1], roomMode: false },
   playerNames: [],
   players: [],       // {name, matchPoints, gameScore}
@@ -264,8 +266,30 @@ const S = {
   sheet: null,       // 'roll' | 'roomroll' | 'roomdecide' | 'roundresult' | 'bankselect'
   roomTimer: null,
   boardReturnTo: null,
-  bankSelection: null // Set of player indices checked in the bank-select sheet
+  bankSelection: null, // Set of player indices checked in the bank-select sheet
+
+  // cross-device room sync (Supabase Realtime Broadcast) — layered on top, unused in pass-and-play
+  role: null,           // 'host' | 'joiner' | null
+  roomCode: null,
+  channel: null,
+  claimedIndices: null, // Set of player indices claimed by a joined phone (host-side)
+  myIndex: null,        // this device's claimed player index (joiner-side)
+  joinerState: null,    // latest snapshot received from the host (joiner-side)
+  joinError: null
 };
+
+/* ============================= SUPABASE CONFIG ============================= */
+// Fill these in from your Supabase project's Settings -> API page.
+// The anon/public key is meant to be exposed client-side.
+const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+const ROOM_SYNC_ENABLED = !SUPABASE_URL.includes('YOUR_SUPABASE_URL') && !SUPABASE_ANON_KEY.includes('YOUR_SUPABASE_ANON_KEY');
+let sbClient = null;
+function getSupabaseClient(){
+  if(!ROOM_SYNC_ENABLED || typeof window.supabase === 'undefined') return null;
+  if(!sbClient){ sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); }
+  return sbClient;
+}
 
 function newPlayerName(v){ return v.trim(); }
 
@@ -273,6 +297,9 @@ function newPlayerName(v){ return v.trim(); }
 function startMatch(){
   S.players = S.playerNames.map(n => ({ name:n, matchPoints:0, gameScore:0 }));
   S.match = { gameIndex: 0, history: [] };
+  if(S.settings.roomMode && ROOM_SYNC_ENABLED){
+    hostCreateRoom();
+  }
   startGame();
 }
 function startGame(){
@@ -445,7 +472,7 @@ function roomTick(){
 }
 function roomBank(idx){
   const g = S.game;
-  if(!g.roomPending.has(idx)) return;
+  if(!g.roomPending || !g.roomPending.has(idx)) return;
   g.roomPending.delete(idx);
   const p = S.players[idx];
   p.gameScore += g.roundTotal;
@@ -478,18 +505,26 @@ function render(){
   else if(S.screen === 'gameover') html = renderGameOver();
   else if(S.screen === 'matchboard') html = renderMatchBoard();
   else if(S.screen === 'matchover') html = renderMatchOver();
+  else if(S.screen === 'join-code') html = renderJoinCode();
+  else if(S.screen === 'join-claim') html = renderJoinClaim();
+  else if(S.screen === 'joiner-view') html = renderJoinerView();
   app.innerHTML = html;
 
   if(S.sheet){
     app.insertAdjacentHTML('beforeend', renderSheet());
   }
   saveState();
+
+  if(S.role === 'host' && S.channel){
+    broadcastState();
+  }
 }
 
 /* ============================= PERSISTENCE ============================= */
 const STORAGE_KEY = 'bank_game_autosave_v1';
 
 function saveState(){
+  if(S.role === 'joiner') return; // joiner sessions aren't persisted — rejoin via room code instead
   try{
     const g = S.game;
     const gameOut = g ? { ...g, roomPending: g.roomPending ? Array.from(g.roomPending) : null } : null;
@@ -519,7 +554,8 @@ function clearSavedState(){
 
 function restoreFromSave(){
   const saved = loadState();
-  if(!saved || !saved.screen || saved.screen === 'setup') return false;
+  const restorableScreens = ['play','gameover','matchboard','matchover'];
+  if(!saved || !restorableScreens.includes(saved.screen)) return false;
   S.screen = saved.screen;
   S.settings = saved.settings || S.settings;
   S.playerNames = saved.playerNames || [];
@@ -552,6 +588,7 @@ function renderSetup(){
     </div>
     <div class="setup-title">New match</div>
     <div class="setup-sub">Set the rules, then add your players.</div>
+    <div class="hint" data-action="goto-join" style="cursor:pointer; text-align:left; margin:-10px 0 22px;">Have a room code? <b style="color:var(--accent);">Join a room →</b></div>
 
     <div class="field-block">
       <div class="field-label">Rounds per game</div>
@@ -584,6 +621,7 @@ function renderSetup(){
         </div>
         <div class="switch ${st.roomMode?'on':''}" data-action="toggle-room"><div class="knob"></div></div>
       </div>
+      ${st.roomMode && !ROOM_SYNC_ENABLED ? '<div class="hint">Cross-device sync isn\'t configured yet — this will run as an on-screen simulation instead.</div>' : ''}
     </div>
 
     <div class="spacer"></div>
@@ -654,6 +692,7 @@ function renderPlay(){
       <div class="game-tag">Game ${S.match.gameIndex+1} of ${st.gamesInMatch}</div>
       <button class="icon-btn" data-action="open-matchboard">◧</button>
     </div>
+    ${S.roomCode ? `<div class="room-code-badge">ROOM ${S.roomCode} · ${S.claimedIndices ? S.claimedIndices.size : 0}/${S.players.length} joined</div>` : ''}
     <div class="round-tag" style="margin-bottom:2px;">Round<b>${g.round}/${st.roundsPerGame}</b></div>
 
     <div class="center-stage">
@@ -909,6 +948,240 @@ function renderMatchOver(){
   </div>`;
 }
 
+/* ============================= ROOM SYNC: JOIN SCREENS ============================= */
+function renderJoinCode(){
+  return `
+  <div class="screen">
+    <div class="topbar">
+      <button class="icon-btn" data-action="back-to-setup">‹</button>
+      <div class="wordmark" style="font-size:18px;">Join a room</div>
+      <div style="width:28px;"></div>
+    </div>
+    <div class="setup-sub" style="margin-bottom:24px;">Enter the room code shown on the host's screen.</div>
+    <div class="player-input-row">
+      <input id="join-code-input" type="text" placeholder="ROOM CODE" maxlength="6"
+        style="text-transform:uppercase; letter-spacing:.15em; font-weight:800; text-align:center;" data-action="noop">
+    </div>
+    ${S.joinError ? `<div class="hint" style="color:#ff9d8f;">${S.joinError}</div>` : ''}
+    ${!ROOM_SYNC_ENABLED ? `<div class="hint">Cross-device sync isn't configured yet.</div>` : ''}
+    <div class="spacer"></div>
+    <button class="btn btn-primary" data-action="submit-join-code">Join</button>
+  </div>`;
+}
+
+function renderJoinClaim(){
+  const js = S.joinerState;
+  if(!js){
+    return `
+    <div class="screen">
+      <div class="topbar">
+        <button class="icon-btn" data-action="leave-room">‹</button>
+        <div class="wordmark" style="font-size:18px;">Room ${S.roomCode}</div>
+        <div style="width:28px;"></div>
+      </div>
+      <div class="hint">Connecting…</div>
+    </div>`;
+  }
+  const rows = js.players.map((p,i) => {
+    const taken = js.claimed.includes(i);
+    return `
+    <div class="bank-row" ${taken ? '' : `data-action="claim-player" data-arg="${i}"`} style="${taken ? 'opacity:.4;cursor:default;' : ''}">
+      <span class="nm">${p.name}</span>
+      <span style="font-size:12px; color:var(--text-dim); font-weight:700;">${taken ? 'Taken' : 'Tap to claim'}</span>
+    </div>`;
+  }).join('');
+  return `
+  <div class="screen">
+    <div class="topbar">
+      <button class="icon-btn" data-action="leave-room">‹</button>
+      <div class="wordmark" style="font-size:18px;">Room ${S.roomCode}</div>
+      <div style="width:28px;"></div>
+    </div>
+    <div class="setup-sub" style="margin-bottom:18px;">Which player are you?</div>
+    <div>${rows}</div>
+  </div>`;
+}
+
+function renderJoinerView(){
+  const js = S.joinerState;
+  if(!js || S.myIndex === null){
+    return `<div class="screen"><div class="hint">Reconnecting…</div></div>`;
+  }
+  if(js.screen === 'gameover' || js.screen === 'matchboard' || js.screen === 'matchover'){
+    const byMatch = js.screen !== 'gameover';
+    const ranked = [...js.players].sort((a,b) => byMatch ? b.matchPoints - a.matchPoints : b.gameScore - a.gameScore);
+    const rows = ranked.map(p => `
+      <div class="rank-row">
+        <div class="rank-info"><div class="nm">${p.name}</div></div>
+        <div class="rank-score">${byMatch ? p.matchPoints : p.gameScore}</div>
+      </div>`).join('');
+    return `
+    <div class="screen">
+      <div class="topbar"><div style="width:28px;"></div><div class="wordmark" style="font-size:18px;">Standings</div><div style="width:28px;"></div></div>
+      <div class="rank-list">${rows}</div>
+      <div class="hint">The host controls what happens next.</div>
+    </div>`;
+  }
+
+  const g = js.game;
+  const me = js.players[S.myIndex];
+  const amIIn = g.inPlayers.includes(S.myIndex);
+  const pending = g.roomPending && g.roomPending.includes(S.myIndex);
+  let actionArea;
+  if(g.busted){
+    actionArea = `<div class="bust-banner">💥 Busted — round total wiped</div>`;
+  } else if(!amIIn){
+    actionArea = `<div class="turn-banner">You banked this round ✓</div>`;
+  } else if(pending){
+    const remaining = Math.max(0, (g.roomDeadline || 0) - Date.now());
+    const pct = Math.max(0, (remaining/5000)*100);
+    actionArea = `
+      <div class="countdown-wrap"><div class="countdown-bar" style="width:${pct}%"></div></div>
+      <div class="countdown-txt">${(remaining/1000).toFixed(1)}s to bank</div>
+      <button class="btn btn-danger" style="width:100%;" data-action="joiner-bank">Bank ${g.roundTotal}</button>
+    `;
+  } else {
+    actionArea = `<div class="turn-banner">Waiting for the next roll…</div>`;
+  }
+  return `
+  <div class="screen">
+    <div class="topbar">
+      <button class="icon-btn" data-action="leave-room">‹</button>
+      <div class="game-tag">Room ${S.roomCode}</div>
+      <div style="width:28px;"></div>
+    </div>
+    <div class="round-tag" style="margin-bottom:2px;">Round<b>${g.round}/${js.settings.roundsPerGame}</b></div>
+    <div class="center-stage">
+      <div class="roundtotal-num">${g.roundTotal}</div>
+      <div class="roundtotal-lbl">Round total</div>
+    </div>
+    <div class="score-row active" style="margin-bottom:18px;">
+      <div class="name">${me.name} (you)</div>
+      <div class="nums"><span class="cur">${me.gameScore}</span></div>
+    </div>
+    <div class="spacer"></div>
+    ${actionArea}
+  </div>`;
+}
+
+/* ============================= ROOM SYNC: HOST ============================= */
+function generateRoomCode(){
+  const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O/1/I/L — easier to read aloud
+  let code = '';
+  for(let i=0;i<5;i++){ code += alphabet[Math.floor(Math.random()*alphabet.length)]; }
+  return code;
+}
+
+function snapshotForBroadcast(){
+  const g = S.game;
+  return {
+    screen: S.screen,
+    settings: S.settings,
+    match: S.match,
+    players: S.players.map(p => ({ name:p.name, gameScore:p.gameScore, matchPoints:p.matchPoints })),
+    claimed: S.claimedIndices ? Array.from(S.claimedIndices) : [],
+    game: g ? {
+      round: g.round,
+      roundTotal: g.roundTotal,
+      busted: g.busted,
+      inPlayers: g.inPlayers,
+      roomPending: g.roomPending ? Array.from(g.roomPending) : null,
+      roomDeadline: g.roomDeadline || null
+    } : null
+  };
+}
+
+function broadcastState(){
+  if(!S.channel) return;
+  S.channel.send({ type:'broadcast', event:'state', payload: snapshotForBroadcast() });
+}
+
+function hostCreateRoom(){
+  const client = getSupabaseClient();
+  if(!client) return;
+  S.role = 'host';
+  S.roomCode = generateRoomCode();
+  S.claimedIndices = new Set();
+  const channel = client.channel('room:' + S.roomCode, { config: { broadcast: { self: false } } });
+  channel.on('broadcast', { event: 'join' }, () => render());
+  channel.on('broadcast', { event: 'claim' }, ({ payload }) => {
+    if(payload && typeof payload.index === 'number'){
+      S.claimedIndices.add(payload.index);
+      render();
+    }
+  });
+  channel.on('broadcast', { event: 'bank' }, ({ payload }) => {
+    if(payload && typeof payload.index === 'number' && S.game && payload.round === S.game.round){
+      roomBank(payload.index);
+    }
+  });
+  channel.subscribe();
+  S.channel = channel;
+}
+
+/* ============================= ROOM SYNC: JOINER ============================= */
+function joinRoom(code){
+  const client = getSupabaseClient();
+  if(!client){ S.joinError = "Room sync isn't set up yet."; render(); return; }
+  teardownRoom();
+  S.role = 'joiner';
+  S.roomCode = code;
+  const channel = client.channel('room:' + code, { config: { broadcast: { self: false } } });
+  channel.on('broadcast', { event: 'state' }, ({ payload }) => {
+    S.joinerState = payload;
+    if(S.screen === 'join-code' || S.screen === 'join-claim'){
+      S.screen = (S.myIndex !== null) ? 'joiner-view' : 'join-claim';
+    }
+    render();
+  });
+  channel.subscribe((status) => {
+    if(status === 'SUBSCRIBED'){
+      S.channel = channel;
+      S.screen = 'join-claim';
+      channel.send({ type:'broadcast', event:'join', payload:{} });
+      render();
+    } else if(status === 'CHANNEL_ERROR' || status === 'TIMED_OUT'){
+      S.joinError = "Couldn't connect — check the room code and try again.";
+      S.screen = 'join-code';
+      render();
+    }
+  });
+}
+
+function attemptJoinFromInput(){
+  const input = document.getElementById('join-code-input');
+  const code = ((input && input.value) || '').trim().toUpperCase();
+  if(!code) return;
+  if(!ROOM_SYNC_ENABLED){ S.joinError = "Room sync isn't set up yet."; render(); return; }
+  joinRoom(code);
+}
+
+function claimPlayer(idx){
+  if(!S.channel) return;
+  S.myIndex = idx;
+  S.channel.send({ type:'broadcast', event:'claim', payload:{ index: idx } });
+  S.screen = 'joiner-view';
+  render();
+}
+
+function sendJoinerBank(){
+  if(!S.channel || S.myIndex === null || !S.joinerState || !S.joinerState.game) return;
+  S.channel.send({ type:'broadcast', event:'bank', payload:{ index: S.myIndex, round: S.joinerState.game.round } });
+}
+
+function teardownRoom(){
+  if(S.channel){ try{ S.channel.unsubscribe(); } catch(e){ /* already closed */ } }
+  S.channel = null;
+  S.role = null;
+  S.roomCode = null;
+  S.claimedIndices = null;
+  S.myIndex = null;
+  S.joinerState = null;
+}
+
+// keeps the joiner's countdown bar and timer text live between state broadcasts
+setInterval(() => { if(S.screen === 'joiner-view' && S.role === 'joiner') render(); }, 250);
+
 /* ============================= EVENTS ============================= */
 document.getElementById('app').addEventListener('click', (e) => {
   const el = e.target.closest('[data-action]');
@@ -922,6 +1195,12 @@ document.getElementById('app').addEventListener('click', (e) => {
     case 'toggle-room': S.settings.roomMode = !S.settings.roomMode; render(); break;
     case 'goto-players': S.screen = 'players'; render(); break;
     case 'back-to-setup': S.screen = 'setup'; render(); break;
+
+    case 'goto-join': S.screen = 'join-code'; S.joinError = null; render(); break;
+    case 'submit-join-code': attemptJoinFromInput(); break;
+    case 'claim-player': claimPlayer(parseInt(arg)); break;
+    case 'joiner-bank': sendJoinerBank(); break;
+    case 'leave-room': teardownRoom(); S.screen = 'setup'; render(); break;
 
     case 'add-player': {
       const input = document.getElementById('player-name-input');
@@ -995,10 +1274,11 @@ document.getElementById('app').addEventListener('click', (e) => {
 
     case 'to-matchboard-from-gameover': S.screen = 'matchboard'; render(); break;
     case 'matchboard-continue': nextGameOrFinish(); break;
-    case 'new-match': clearSavedState(); S.screen = 'setup'; S.playerNames = []; S.players = []; S.match = { gameIndex:0, history:[] }; S.game = null; render(); break;
+    case 'new-match': teardownRoom(); clearSavedState(); S.screen = 'setup'; S.playerNames = []; S.players = []; S.match = { gameIndex:0, history:[] }; S.game = null; render(); break;
 
     case 'reset-match': {
       if(window.confirm('Reset this match? Everyone\'s scores will be lost.')){
+        teardownRoom();
         clearSavedState();
         S.screen = 'setup';
         S.playerNames = [];
@@ -1026,6 +1306,10 @@ document.getElementById('app').addEventListener('keydown', (e) => {
     e.preventDefault();
     const v = newPlayerName(e.target.value || '');
     if(v){ S.playerNames.push(v); render(); }
+  }
+  if(e.target.id === 'join-code-input' && e.key === 'Enter'){
+    e.preventDefault();
+    attemptJoinFromInput();
   }
 });
 
