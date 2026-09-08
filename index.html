@@ -51,14 +51,16 @@
   #app{
     width:100%;
     max-width:430px;
-    min-height:100vh;
+    height:100dvh;
+    min-height:0;
     position:relative;
     overflow:hidden;
     display:flex;
     flex-direction:column;
   }
   .screen{
-    flex:1;
+    flex:1 1 0;
+    min-height:0;
     display:flex;
     flex-direction:column;
     padding: 28px 22px 22px;
@@ -150,6 +152,33 @@
   .hint{ color: var(--text-dim); font-size:13px; text-align:center; margin: 14px 0; }
 
   /* ---------- play screen ---------- */
+  .screen.screen-play{
+    padding:0;
+    overflow-y:auto;
+    min-height:0;
+  }
+  .play-window{
+    display:flex; flex-direction:column;
+    height:100%;
+    padding:8px 16px 0;
+  }
+  .gradient-shadow{
+    height:100px; width:100%; flex-shrink:0;
+    background: linear-gradient(180deg, #000000, #12232e);
+    margin-bottom:-16px;
+  }
+  .action-dock{
+    display:flex; flex-direction:column; justify-content:center; align-items:stretch;
+    padding:16px 16px 32px;
+    background:#1f384b;
+    border:2px solid #1f384b;
+    border-radius:12px 12px 0 0;
+    margin-bottom:0;
+    width:100%;
+    overflow:auto;
+    position:sticky; bottom:0; z-index:5; flex-shrink:0;
+    box-shadow: 0 -16px 32px 6px rgba(0,0,0,.4);
+  }
   .round-tag{ font-size:13px; color:var(--text-dim); font-weight:700; }
   .round-tag b{ color: var(--text); font-size:15px; display:block; margin-top:2px;}
   .game-tag{ font-size:11px; color:var(--text-faint); text-transform:uppercase; letter-spacing:.06em; font-weight:700; }
@@ -752,36 +781,40 @@ function renderPlay(){
   const activePlayer = activeIdx !== null ? S.players[activeIdx] : null;
 
   return `
-  <div class="screen">
-    <div class="topbar">
-      <button class="icon-btn" data-action="reset-match" title="Reset match">↺</button>
-      <div class="game-tag">Game ${S.match.gameIndex+1} of ${st.gamesInMatch}</div>
-      <button class="icon-btn" data-action="open-matchboard">◧</button>
-    </div>
-    ${S.roomCode ? `<div class="room-code-badge">ROOM ${S.roomCode} · ${S.claimedIndices ? S.claimedIndices.size : 0}/${S.players.length} joined</div>` : ''}
-    <div class="round-tag" style="margin-bottom:2px;">Round<b>${g.round}/${st.roundsPerGame}</b></div>
-
-    <div class="center-stage">
-      <div class="roundtotal-num">${g.roundTotal}</div>
-      <div class="roundtotal-lbl">Round total</div>
-      <div class="rollcount-lbl">Roll ${g.rollCount}</div>
-      <div class="phase-flag ${nextPhase}">${nextPhase === 'safe' ? 'Safe · 7 pays 70' : 'Risk · 7 busts'}</div>
-    </div>
-
-    <div class="score-list">${rows}</div>
-
-    <div class="spacer"></div>
-
-    ${st.roomMode ? `
-      <div class="turn-banner">Waiting for the next roll — everyone banks on their own</div>
-      <button class="btn btn-primary" data-action="room-open-roll">Roll</button>
-    ` : `
-      <div class="turn-banner"><b>${activePlayer ? activePlayer.name : ''}</b>'s turn</div>
-      <div class="decision-row">
-        <button class="btn btn-primary" data-action="open-roll-pad">Roll</button>
-        <button class="btn btn-ghost" data-action="open-bank-select">Bank</button>
+  <div class="screen screen-play">
+    <div class="play-window">
+      <div class="topbar">
+        <button class="icon-btn" data-action="reset-match" title="Reset match">↺</button>
+        <div class="game-tag">Game ${S.match.gameIndex+1} of ${st.gamesInMatch}</div>
+        <button class="icon-btn" data-action="open-matchboard">◧</button>
       </div>
-    `}
+      ${S.roomCode ? `<div class="room-code-badge">ROOM ${S.roomCode} · ${S.claimedIndices ? S.claimedIndices.size : 0}/${S.players.length} joined</div>` : ''}
+      <div class="round-tag" style="margin-bottom:2px;">Round<b>${g.round}/${st.roundsPerGame}</b></div>
+
+      <div class="center-stage">
+        <div class="roundtotal-num">${g.roundTotal}</div>
+        <div class="roundtotal-lbl">Round total</div>
+        <div class="rollcount-lbl">Roll ${g.rollCount}</div>
+        <div class="phase-flag ${nextPhase}">${nextPhase === 'safe' ? 'Safe · 7 pays 70' : 'Risk · 7 busts'}</div>
+      </div>
+
+      <div class="score-list">${rows}</div>
+
+      <div class="spacer"></div>
+    </div>
+    <div class="gradient-shadow"></div>
+    <div class="action-dock">
+      ${st.roomMode ? `
+        <div class="turn-banner">Waiting for the next roll — everyone banks on their own</div>
+        <button class="btn btn-primary" data-action="room-open-roll">Roll</button>
+      ` : `
+        <div class="turn-banner"><b>${activePlayer ? activePlayer.name : ''}</b>'s turn</div>
+        <div class="decision-row">
+          <button class="btn btn-primary" data-action="open-roll-pad">Roll</button>
+          <button class="btn btn-ghost" data-action="open-bank-select">Bank</button>
+        </div>
+      `}
+    </div>
   </div>`;
 }
 
@@ -883,15 +916,18 @@ function roomDecideInner(remainingMs){
   return `
     <div class="sheet-handle"></div>
     <div class="sheet-title">Round total: ${g.roundTotal}</div>
-    <div class="countdown-wrap"><div class="countdown-bar" style="width:${pct}%"></div></div>
-    <div class="countdown-txt">${secs}s to bank — no action keeps you in</div>
+    <div class="countdown-wrap"><div class="countdown-bar" id="room-countdown-bar" style="width:${pct}%"></div></div>
+    <div class="countdown-txt" id="room-countdown-txt">${secs}s to bank — no action keeps you in</div>
     <div class="roomdecide-list">${rows}</div>
   `;
 }
 
 function renderRoomDecideSheetOnly(remainingMs){
-  const el = document.getElementById('room-decide-sheet');
-  if(el) el.innerHTML = roomDecideInner(remainingMs);
+  const bar = document.getElementById('room-countdown-bar');
+  const txt = document.getElementById('room-countdown-txt');
+  if(!bar || !txt) return;
+  bar.style.width = Math.max(0, (remainingMs/5000)*100) + '%';
+  txt.textContent = Math.max(0, remainingMs/1000).toFixed(1) + 's to bank — no action keeps you in';
 }
 
 function renderRoundResultSheet(){
