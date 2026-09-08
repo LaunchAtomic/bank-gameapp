@@ -358,7 +358,7 @@ const S = {
   players: [],       // {name, matchPoints, gameScore}
   match: { gameIndex: 0, history: [] }, // history: [{gameNum, awards:[{name,score,points}]}]
   game: null,        // active game state
-  sheet: null,       // 'roll' | 'roomroll' | 'roomdecide' | 'roundresult' | 'bankselect'
+  sheet: null,       // 'roll' | 'roomroll' | 'roomdecide' | 'roundresult' | 'bankselect' | 'hostclaim'
   roomTimer: null,
   boardReturnTo: null,
   bankSelection: null, // Set of player indices checked in the bank-select sheet
@@ -368,6 +368,7 @@ const S = {
   roomCode: null,
   channel: null,
   claimedIndices: null, // Set of player indices claimed by a joined phone (host-side)
+  hostIndex: null,      // which player the host's own device is playing as (host-side)
   myIndex: null,        // this device's claimed player index (joiner-side)
   joinerState: null,    // latest snapshot received from the host (joiner-side)
   joinError: null
@@ -762,15 +763,18 @@ function renderPlay(){
   const nextPhase = upcomingPhase();
   const activeIdx = (!S.sheet && !st.roomMode && g.inPlayers.length) ? g.inPlayers[g.turnIdx] : null;
 
-  const sortedIdx = S.players.map((_,i)=>i).sort((a,b)=> S.players[b].gameScore - S.players[a].gameScore);
+  let sortedIdx = S.players.map((_,i)=>i).sort((a,b)=> S.players[b].gameScore - S.players[a].gameScore);
+  if(st.roomMode && S.hostIndex !== null){
+    sortedIdx = [S.hostIndex, ...sortedIdx.filter(i => i !== S.hostIndex)];
+  }
   const rows = sortedIdx.map(i => {
     const p = S.players[i];
     const isIn = g.inPlayers.includes(i);
-    const isActive = activeIdx === i;
+    const isMe = activeIdx === i || (st.roomMode && i === S.hostIndex);
     const wouldBe = p.gameScore + (isIn ? g.roundTotal : 0);
     return `
-    <div class="score-row ${isActive?'active':''} ${!isIn?'banked':''}">
-      <div class="name">${isActive ? '<span class="turn-dot"></span>' : ''}${p.name}</div>
+    <div class="score-row ${isMe?'active':''} ${!isIn?'banked':''}">
+      <div class="name">${isMe ? '<span class="turn-dot"></span>' : ''}${p.name}${(st.roomMode && i === S.hostIndex) ? ' (you)' : ''}</div>
       <div class="nums">
         <span class="cur">${p.gameScore}</span>
         ${isIn && g.roundTotal > 0 ? `<span class="would">→ ${wouldBe}</span>` : ''}
@@ -789,6 +793,7 @@ function renderPlay(){
         <button class="icon-btn" data-action="open-matchboard">◧</button>
       </div>
       ${S.roomCode ? `<div class="room-code-badge">ROOM ${S.roomCode} · ${S.claimedIndices ? S.claimedIndices.size : 0}/${S.players.length} joined</div>` : ''}
+      ${S.roomCode && S.hostIndex === null ? `<div class="hint" data-action="open-host-claim" style="cursor:pointer; margin-top:-4px;">Which player are you? <b style="color:var(--accent);">Tap to claim →</b></div>` : ''}
       <div class="round-tag" style="margin-bottom:2px;">Round<b>${g.round}/${st.roundsPerGame}</b></div>
 
       <div class="center-stage">
@@ -806,7 +811,10 @@ function renderPlay(){
     <div class="action-dock">
       ${st.roomMode ? `
         <div class="turn-banner">Waiting for the next roll — everyone banks on their own</div>
-        <button class="btn btn-primary" data-action="room-open-roll">Roll</button>
+        <div class="decision-row">
+          <button class="btn btn-primary" data-action="room-open-roll">Roll</button>
+          <button class="btn btn-ghost" data-action="open-bank-select">Bank</button>
+        </div>
       ` : `
         <div class="turn-banner"><b>${activePlayer ? activePlayer.name : ''}</b>'s turn</div>
         <div class="decision-row">
@@ -871,7 +879,29 @@ function renderSheet(){
   if(S.sheet === 'bankselect'){
     return renderBankSelectSheet();
   }
+  if(S.sheet === 'hostclaim'){
+    return renderHostClaimSheet();
+  }
   return '';
+}
+
+function renderHostClaimSheet(){
+  const rows = S.players.map((p,i) => {
+    const taken = S.claimedIndices && S.claimedIndices.has(i) && i !== S.hostIndex;
+    return `
+    <div class="bank-row" ${taken ? '' : `data-action="host-claim-player" data-arg="${i}"`} style="${taken ? 'opacity:.4;cursor:default;' : ''}">
+      <span class="nm">${p.name}</span>
+      <span style="font-size:12px; color:var(--text-dim); font-weight:700;">${taken ? 'Taken' : 'Tap to claim'}</span>
+    </div>`;
+  }).join('');
+  return `
+  <div class="sheet-backdrop" data-action="dismiss-sheet">
+    <div class="sheet" data-action="noop">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">Which player are you?</div>
+      <div>${rows}</div>
+    </div>
+  </div>`;
 }
 
 function renderBankSelectSheet(){
@@ -900,14 +930,18 @@ function roomDecideInner(remainingMs){
   const g = S.game;
   const pct = Math.max(0, (remainingMs/5000)*100);
   const secs = Math.max(0, (remainingMs/1000)).toFixed(1);
-  const rows = g.inPlayers.map(idx => {
+  const orderedIdx = (S.hostIndex !== null && g.inPlayers.includes(S.hostIndex))
+    ? [S.hostIndex, ...g.inPlayers.filter(i => i !== S.hostIndex)]
+    : g.inPlayers;
+  const rows = orderedIdx.map(idx => {
     const p = S.players[idx];
     const pending = g.roomPending && g.roomPending.has(idx);
     const wouldBe = p.gameScore + g.roundTotal;
+    const isMe = idx === S.hostIndex;
     return `
     <div class="roomdecide-row ${pending?'':'done'}">
       <div class="who">
-        <span class="nm">${p.name}</span>
+        <span class="nm">${isMe ? '<span class="turn-dot" style="display:inline-block;vertical-align:middle;margin-right:4px;"></span>' : ''}${p.name}${isMe ? ' (you)' : ''}</span>
         <span class="ww">${p.gameScore} → ${wouldBe}</span>
       </div>
       ${pending ? `<button data-action="room-bank" data-arg="${idx}">Bank</button>` : `<span class="status">Staying</span>`}
@@ -1289,6 +1323,7 @@ function teardownRoom(){
   S.role = null;
   S.roomCode = null;
   S.claimedIndices = null;
+  S.hostIndex = null;
   S.myIndex = null;
   S.joinerState = null;
 }
@@ -1324,6 +1359,16 @@ document.getElementById('app').addEventListener('click', (e) => {
     case 'back-to-setup': S.screen = 'setup'; render(); break;
 
     case 'goto-join': S.screen = 'join-code'; S.joinError = null; render(); break;
+    case 'open-host-claim': S.sheet = 'hostclaim'; render(); break;
+    case 'host-claim-player': {
+      const idx = parseInt(arg);
+      S.hostIndex = idx;
+      if(!S.claimedIndices) S.claimedIndices = new Set();
+      S.claimedIndices.add(idx);
+      S.sheet = null;
+      render();
+      break;
+    }
     case 'submit-join-code': attemptJoinFromInput(); break;
     case 'claim-player': claimPlayer(parseInt(arg)); break;
     case 'joiner-bank': sendJoinerBank(); break;
@@ -1358,7 +1403,7 @@ document.getElementById('app').addEventListener('click', (e) => {
       break;
     }
     case 'dismiss-sheet': {
-      if(S.sheet === 'roll' || S.sheet === 'roomroll'){
+      if(S.sheet === 'roll' || S.sheet === 'roomroll' || S.sheet === 'hostclaim'){
         S.sheet = null;
         render();
       } else if(S.sheet === 'bankselect'){
