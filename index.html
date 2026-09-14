@@ -565,7 +565,15 @@ function roomApplyRoll(val){
   const oldTotal = S.game.roundTotal;
   const ok = applyRoll(val);
   if(ok){
-    roomStartDecisionPhase();
+    const g = S.game;
+    if(g.inPlayers.length > 1){
+      g.turnIdx = (g.turnIdx + 1) % g.inPlayers.length;
+    }
+    if(g.rollCount > 3){
+      roomStartDecisionPhase();
+    } else {
+      render(); // safe roll — no bust risk yet, so no decide window; pad stays open for the next roll
+    }
     const el = document.querySelector('.roundtotal-num');
     animateNumber(el, oldTotal, S.game.roundTotal);
   }
@@ -596,6 +604,7 @@ function roomBank(idx){
   const p = S.players[idx];
   p.gameScore += g.roundTotal;
   g.inPlayers = g.inPlayers.filter(i => i !== idx);
+  if(g.turnIdx >= g.inPlayers.length) g.turnIdx = 0;
   render();
   if(g.roomPending.size === 0){
     clearInterval(S.roomTimer);
@@ -784,7 +793,7 @@ function renderPlay(){
   const g = S.game;
   const st = S.settings;
   const nextPhase = upcomingPhase();
-  const activeIdx = (!S.sheet && !st.roomMode && g.inPlayers.length) ? g.inPlayers[g.turnIdx] : null;
+  const activeIdx = (!S.sheet && g.inPlayers.length) ? g.inPlayers[g.turnIdx] : null;
 
   let sortedIdx = S.players.map((_,i)=>i).sort((a,b)=> S.players[b].gameScore - S.players[a].gameScore);
   if(st.roomMode && S.hostIndex !== null){
@@ -793,11 +802,12 @@ function renderPlay(){
   const rows = sortedIdx.map(i => {
     const p = S.players[i];
     const isIn = g.inPlayers.includes(i);
-    const isMe = activeIdx === i || (st.roomMode && i === S.hostIndex);
+    const isRollTurn = activeIdx === i;
+    const isHostSelf = st.roomMode && i === S.hostIndex;
     const wouldBe = p.gameScore + (isIn ? g.roundTotal : 0);
     return `
-    <div class="score-row ${isMe?'active':''} ${!isIn?'banked':''}">
-      <div class="name">${isMe ? '<span class="turn-dot"></span>' : ''}${p.name}${(st.roomMode && i === S.hostIndex) ? ' (you)' : ''}</div>
+    <div class="score-row ${(isRollTurn||isHostSelf)?'active':''} ${!isIn?'banked':''}">
+      <div class="name">${isRollTurn ? '<span class="turn-dot"></span>' : ''}${p.name}${isHostSelf ? ' (you)' : ''}</div>
       <div class="nums">
         <span class="cur">${p.gameScore}</span>
         ${isIn && g.roundTotal > 0 ? `<span class="would">→ ${wouldBe}</span>` : ''}
@@ -833,7 +843,7 @@ function renderPlay(){
     <div class="gradient-shadow"></div>
     <div class="action-dock">
       ${st.roomMode ? `
-        <div class="turn-banner">Waiting for the next roll — everyone banks on their own</div>
+        <div class="turn-banner"><b>${activePlayer ? activePlayer.name : ''}</b>'s turn to roll — anyone can bank</div>
         <div class="decision-row">
           <button class="btn btn-primary" data-action="room-open-roll">Roll</button>
           <button class="btn btn-ghost" data-action="open-bank-select">Bank</button>
@@ -884,11 +894,14 @@ function renderSheet(){
     </div>`;
   }
   if(S.sheet === 'roomroll'){
+    const g = S.game;
+    const activeIdx = g.inPlayers.length ? g.inPlayers[g.turnIdx] : null;
+    const activeName = activeIdx !== null ? S.players[activeIdx].name : '';
     return `
     <div class="sheet-backdrop" data-action="dismiss-sheet">
       <div class="sheet" data-action="noop">
         <div class="sheet-handle"></div>
-        <div class="sheet-title">Enter the roll</div>
+        <div class="sheet-title">${activeName}'s roll</div>
         ${padGridHtml('room-enter-roll')}
       </div>
     </div>`;
@@ -1185,16 +1198,19 @@ function renderJoinerView(){
   const g = js.game;
   const amIIn = g.inPlayers.includes(S.myIndex);
   const pending = g.roomPending && g.roomPending.includes(S.myIndex);
+  const activeIdx = g.inPlayers.length ? g.inPlayers[g.turnIdx] : null;
+  const activePlayer = activeIdx !== null ? js.players[activeIdx] : null;
 
   const sortedIdx = js.players.map((_,i)=>i).sort((a,b) => js.players[b].gameScore - js.players[a].gameScore);
   const scoreRows = sortedIdx.map(i => {
     const p = js.players[i];
     const isIn = g.inPlayers.includes(i);
+    const isRollTurn = activeIdx === i;
     const isMe = i === S.myIndex;
     const wouldBe = p.gameScore + (isIn ? g.roundTotal : 0);
     return `
-    <div class="score-row ${isMe?'active':''} ${!isIn?'banked':''}">
-      <div class="name">${isMe ? '<span class="turn-dot"></span>' : ''}${p.name}${isMe?' (you)':''}</div>
+    <div class="score-row ${(isRollTurn||isMe)?'active':''} ${!isIn?'banked':''}">
+      <div class="name">${isRollTurn ? '<span class="turn-dot"></span>' : ''}${p.name}${isMe?' (you)':''}</div>
       <div class="nums">
         <span class="cur">${p.gameScore}</span>
         ${isIn && g.roundTotal > 0 ? `<span class="would">→ ${wouldBe}</span>` : ''}
@@ -1215,7 +1231,7 @@ function renderJoinerView(){
       <button class="btn btn-danger" style="width:100%;" data-action="joiner-bank">Bank ${g.roundTotal}</button>
     `;
   } else {
-    actionArea = `<div class="turn-banner">Waiting for the next roll…</div>`;
+    actionArea = `<div class="turn-banner"><b>${activePlayer ? activePlayer.name : ''}</b>'s turn to roll</div>`;
   }
   return `
   <div class="screen">
@@ -1256,6 +1272,7 @@ function snapshotForBroadcast(){
       roundTotal: g.roundTotal,
       busted: g.busted,
       inPlayers: g.inPlayers,
+      turnIdx: g.turnIdx,
       roomPending: g.roomPending ? Array.from(g.roomPending) : null,
       roomDeadline: g.roomDeadline || null
     } : null
