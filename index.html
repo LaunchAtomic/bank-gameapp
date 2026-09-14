@@ -302,6 +302,16 @@
   .pad-tile.doubles .pips i::after{ display:none; }
   .pad-tile.doubles .dlabel{ font-family:'Manrope',sans-serif; font-size:12px; font-weight:800; }
 
+  .dice-roller{ display:flex; flex-direction:column; align-items:stretch; gap:22px; padding: 8px 0 4px; }
+  .dice-pair{ display:flex; justify-content:center; gap:18px; }
+  .die-face{
+    width:84px; height:84px; border-radius:var(--r-tile);
+    background: linear-gradient(180deg, var(--accent-hi), var(--accent-lo));
+    box-shadow: var(--gloss);
+    display:flex; align-items:center; justify-content:center;
+    font-size:56px; color:var(--ink); line-height:1;
+  }
+
   .decision-row{ display:flex; gap:12px; }
   .decision-row .btn{ flex:1; }
 
@@ -393,7 +403,7 @@
 /* ============================= STATE ============================= */
 const S = {
   screen: 'setup', // setup | players | play | matchboard | join-code | join-claim | joiner-view
-  settings: { roundsPerGame: 7, gamesInMatch: 3, podium: [4,2,1], roomMode: false },
+  settings: { roundsPerGame: 7, gamesInMatch: 3, podium: [4,2,1], roomMode: false, virtualDice: false },
   playerNames: [],
   players: [],       // {name, matchPoints, gameScore}
   match: { gameIndex: 0, history: [] }, // history: [{gameNum, awards:[{name,score,points}]}]
@@ -789,6 +799,16 @@ function renderSetup(){
       ${st.roomMode && !ROOM_SYNC_ENABLED ? '<div class="hint">Cross-device sync isn\'t configured yet — this will run as an on-screen simulation instead.</div>' : ''}
     </div>
 
+    <div class="field-block">
+      <div class="toggle-row">
+        <div>
+          <div class="t-label">Virtual dice</div>
+          <div class="t-sub">No dice handy? Roll 2d6 in the app instead of entering it yourself</div>
+        </div>
+        <div class="switch ${st.virtualDice?'on':''}" data-action="toggle-virtual-dice"><div class="knob"></div></div>
+      </div>
+    </div>
+
     <div class="spacer"></div>
     <button class="btn btn-primary" data-action="goto-players">Add players</button>
   </div>`;
@@ -915,6 +935,58 @@ function padGridHtml(onRoll){
   return html;
 }
 
+function virtualDiceHtml(onRoll){
+  return `
+  <div class="dice-roller">
+    <div class="dice-pair">
+      <div class="die-face" id="die-1">⚀</div>
+      <div class="die-face" id="die-2">⚀</div>
+    </div>
+    <button class="btn btn-primary" style="width:100%" data-action="virtual-roll" data-arg="${onRoll}">Roll dice</button>
+  </div>`;
+}
+
+const DIE_GLYPHS = ['','⚀','⚁','⚂','⚃','⚄','⚅'];
+function rollTwoDice(){
+  const d1 = Math.floor(Math.random()*6)+1;
+  const d2 = Math.floor(Math.random()*6)+1;
+  return { d1, d2, sum: d1+d2, isDoubles: d1 === d2 };
+}
+function animateDiceRoll(onRoll){
+  const die1 = document.getElementById('die-1');
+  const die2 = document.getElementById('die-2');
+  const btn = document.querySelector('[data-action="virtual-roll"]');
+  if(!die1 || !die2) return;
+  if(btn) btn.disabled = true;
+  let ticks = 0;
+  const interval = setInterval(() => {
+    die1.textContent = DIE_GLYPHS[Math.floor(Math.random()*6)+1];
+    die2.textContent = DIE_GLYPHS[Math.floor(Math.random()*6)+1];
+    ticks++;
+    if(ticks >= 10){
+      clearInterval(interval);
+      const roll = rollTwoDice();
+      die1.textContent = DIE_GLYPHS[roll.d1];
+      die2.textContent = DIE_GLYPHS[roll.d2];
+      setTimeout(() => {
+        const phase = upcomingPhase();
+        const val = (phase === 'risk' && roll.isDoubles) ? 'doubles' : roll.sum;
+        if(onRoll === 'enter-roll'){
+          const oldTotal = S.game.roundTotal;
+          const ok = applyRoll(val);
+          if(ok){
+            advanceAfterRoll();
+            const el = document.querySelector('.roundtotal-num');
+            animateNumber(el, oldTotal, S.game.roundTotal);
+          }
+        } else {
+          roomApplyRoll(val);
+        }
+      }, 400);
+    }
+  }, 70);
+}
+
 /* ============================= SHEETS ============================= */
 function renderSheet(){
   if(S.sheet === 'roll'){
@@ -926,7 +998,7 @@ function renderSheet(){
       <div class="sheet" data-action="noop">
         <div class="sheet-handle"></div>
         <div class="sheet-title">${activeName}'s roll</div>
-        ${padGridHtml('enter-roll')}
+        ${S.settings.virtualDice ? virtualDiceHtml('enter-roll') : padGridHtml('enter-roll')}
       </div>
     </div>`;
   }
@@ -939,7 +1011,7 @@ function renderSheet(){
       <div class="sheet" data-action="noop">
         <div class="sheet-handle"></div>
         <div class="sheet-title">${activeName}'s roll</div>
-        ${padGridHtml('room-enter-roll')}
+        ${S.settings.virtualDice ? virtualDiceHtml('room-enter-roll') : padGridHtml('room-enter-roll')}
       </div>
     </div>`;
   }
@@ -1491,6 +1563,7 @@ document.getElementById('app').addEventListener('click', (e) => {
     case 'set-rounds': S.settings.roundsPerGame = parseInt(arg); render(); break;
     case 'set-games': S.settings.gamesInMatch = parseInt(arg); render(); break;
     case 'toggle-room': S.settings.roomMode = !S.settings.roomMode; render(); break;
+    case 'toggle-virtual-dice': S.settings.virtualDice = !S.settings.virtualDice; render(); break;
     case 'goto-players': S.screen = 'players'; render(); break;
     case 'back-to-setup': S.screen = 'setup'; render(); break;
 
@@ -1539,6 +1612,7 @@ document.getElementById('app').addEventListener('click', (e) => {
       // if a bust occurred, handleBust() already swapped the sheet to the round result
       break;
     }
+    case 'virtual-roll': animateDiceRoll(arg); break;
     case 'dismiss-sheet': {
       if(S.sheet === 'roll' || S.sheet === 'roomroll' || S.sheet === 'hostclaim'){
         S.sheet = null;
