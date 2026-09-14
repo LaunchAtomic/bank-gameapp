@@ -697,6 +697,26 @@ function clearSavedState(){
   try{ localStorage.removeItem(STORAGE_KEY); } catch(e){ /* ignore */ }
 }
 
+// separate, small key just for "which room/player was I" — lets a reload or an
+// accidental close rejoin instead of losing the room entirely
+const ROOM_STORAGE_KEY = 'bank_game_room_v1';
+function saveRoomInfo(){
+  try{
+    localStorage.setItem(ROOM_STORAGE_KEY, JSON.stringify({
+      role: S.role, roomCode: S.roomCode, hostIndex: S.hostIndex, myIndex: S.myIndex
+    }));
+  } catch(e){ /* ignore */ }
+}
+function loadRoomInfo(){
+  try{
+    const raw = localStorage.getItem(ROOM_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch(e){ return null; }
+}
+function clearRoomInfo(){
+  try{ localStorage.removeItem(ROOM_STORAGE_KEY); } catch(e){ /* ignore */ }
+}
+
 function restoreFromSave(){
   const saved = loadState();
   const restorableScreens = ['play','gameover','matchboard','matchover'];
@@ -940,11 +960,13 @@ function renderSheet(){
 
 function renderHostClaimSheet(){
   const rows = S.players.map((p,i) => {
-    const taken = S.claimedIndices && S.claimedIndices.has(i) && i !== S.hostIndex;
+    const isMe = i === S.hostIndex;
+    const claimedByOther = S.claimedIndices && S.claimedIndices.has(i) && !isMe;
+    const label = isMe ? 'You' : (claimedByOther ? 'Claimed — tap to take over' : 'Tap to claim');
     return `
-    <div class="bank-row" ${taken ? '' : `data-action="host-claim-player" data-arg="${i}"`} style="${taken ? 'opacity:.4;cursor:default;' : ''}">
+    <div class="bank-row" data-action="host-claim-player" data-arg="${i}">
       <span class="nm">${p.name}</span>
-      <span style="font-size:12px; color:var(--text-dim); font-weight:700;">${taken ? 'Taken' : 'Tap to claim'}</span>
+      <span style="font-size:12px; color:var(--text-dim); font-weight:700;">${label}</span>
     </div>`;
   }).join('');
   return `
@@ -1172,11 +1194,13 @@ function renderJoinClaim(){
     </div>`;
   }
   const rows = js.players.map((p,i) => {
-    const taken = js.claimed.includes(i);
+    const isMe = i === S.myIndex;
+    const claimedByOther = js.claimed.includes(i) && !isMe;
+    const label = isMe ? 'You' : (claimedByOther ? 'Claimed — tap to take over' : 'Tap to claim');
     return `
-    <div class="bank-row" ${taken ? '' : `data-action="claim-player" data-arg="${i}"`} style="${taken ? 'opacity:.4;cursor:default;' : ''}">
+    <div class="bank-row" data-action="claim-player" data-arg="${i}">
       <span class="nm">${p.name}</span>
-      <span style="font-size:12px; color:var(--text-dim); font-weight:700;">${taken ? 'Taken' : 'Tap to claim'}</span>
+      <span style="font-size:12px; color:var(--text-dim); font-weight:700;">${label}</span>
     </div>`;
   }).join('');
   return `
@@ -1301,13 +1325,10 @@ function broadcastState(){
   S.channel.send({ type:'broadcast', event:'state', payload: snapshotForBroadcast() });
 }
 
-function hostCreateRoom(){
+function subscribeHostChannel(code){
   const client = getSupabaseClient();
   if(!client) return;
-  S.role = 'host';
-  S.roomCode = generateRoomCode();
-  S.claimedIndices = new Set();
-  const channel = client.channel('room:' + S.roomCode, { config: { broadcast: { self: false } } });
+  const channel = client.channel('room:' + code, { config: { broadcast: { self: false } } });
   channel.on('broadcast', { event: 'join' }, () => render());
   channel.on('broadcast', { event: 'claim' }, ({ payload }) => {
     if(payload && typeof payload.index === 'number'){
@@ -1322,6 +1343,16 @@ function hostCreateRoom(){
   });
   channel.subscribe();
   S.channel = channel;
+}
+
+function hostCreateRoom(){
+  const client = getSupabaseClient();
+  if(!client) return;
+  S.role = 'host';
+  S.roomCode = generateRoomCode();
+  S.claimedIndices = new Set();
+  saveRoomInfo();
+  subscribeHostChannel(S.roomCode);
 }
 
 /* ============================= ROOM SYNC: JOINER ============================= */
@@ -1365,6 +1396,7 @@ function claimPlayer(idx){
   if(!S.channel) return;
   S.myIndex = idx;
   S.channel.send({ type:'broadcast', event:'claim', payload:{ index: idx } });
+  saveRoomInfo();
   S.screen = 'joiner-view';
   render();
 }
@@ -1383,6 +1415,53 @@ function teardownRoom(){
   S.hostIndex = null;
   S.myIndex = null;
   S.joinerState = null;
+  clearRoomInfo();
+}
+
+// called once at boot (after restoreFromSave) — reconnects a room if this device was
+// mid-match when it reloaded or was closed, instead of dropping back to a blank setup
+function tryRejoinRoom(){
+  const info = loadRoomInfo();
+  if(!info || !ROOM_SYNC_ENABLED) return;
+  if(info.role === 'host' && S.screen === 'play' && S.game && S.settings.roomMode){
+    S.role = 'host';
+    S.roomCode = info.roomCode;
+    S.hostIndex = (typeof info.hostIndex === 'number') ? info.hostIndex : null;
+    S.claimedIndices = new Set(S.hostIndex !== null ? [S.hostIndex] : []);
+    subscribeHostChannel(S.roomCode);
+  } else if(info.role === 'joiner' && typeof info.myIndex === 'number' && info.roomCode){
+    rejoinAsJoiner(info.roomCode, info.myIndex);
+  } else {
+    clearRoomInfo();
+  }
+}
+
+function rejoinAsJoiner(code, myIndex){
+  const client = getSupabaseClient();
+  if(!client) return;
+  S.role = 'joiner';
+  S.roomCode = code;
+  S.myIndex = myIndex;
+  S.screen = 'join-code'; // transient, until SUBSCRIBED below
+  const channel = client.channel('room:' + code, { config: { broadcast: { self: false } } });
+  channel.on('broadcast', { event: 'state' }, ({ payload }) => {
+    S.joinerState = payload;
+    render();
+  });
+  channel.subscribe((status) => {
+    if(status === 'SUBSCRIBED'){
+      S.channel = channel;
+      S.screen = 'joiner-view';
+      channel.send({ type:'broadcast', event:'claim', payload:{ index: myIndex } });
+      channel.send({ type:'broadcast', event:'join', payload:{} });
+      render();
+    } else if(status === 'CHANNEL_ERROR' || status === 'TIMED_OUT'){
+      clearRoomInfo();
+      S.role = null; S.roomCode = null; S.myIndex = null;
+      S.screen = 'setup';
+      render();
+    }
+  });
 }
 
 // keeps the joiner's countdown bar and timer text live between state broadcasts,
@@ -1422,6 +1501,7 @@ document.getElementById('app').addEventListener('click', (e) => {
       S.hostIndex = idx;
       if(!S.claimedIndices) S.claimedIndices = new Set();
       S.claimedIndices.add(idx);
+      saveRoomInfo();
       S.sheet = null;
       render();
       break;
@@ -1543,6 +1623,7 @@ document.getElementById('app').addEventListener('keydown', (e) => {
 });
 
 restoreFromSave();
+tryRejoinRoom();
 render();
 
 setTimeout(() => {
