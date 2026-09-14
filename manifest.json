@@ -1,7 +1,7 @@
 {
-  "name": "Bank",
-  "short_name": "Bank",
-  "description": "A push-your-luck dice game for family and friends.",
+  "name": "Bank or Bust",
+  "short_name": "Bank or Bust",
+  "description": "A classic push your luck dice game.",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#11212b",
