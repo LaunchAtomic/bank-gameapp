@@ -106,6 +106,7 @@
     font-weight:800; color:var(--ink); font-size:15px;
     box-shadow: 0 2px 0 rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.45);
   }
+  .brand-icon{ height:38px; width:auto; display:block; flex-shrink:0; }
   .wordmark{ font-size: 22px; font-weight:800; letter-spacing: 0.02em; }
 
   /* ---------- buttons ---------- */
@@ -701,7 +702,7 @@ function renderSetup(){
   return `
   <div class="screen">
     <div class="brandmark" style="margin-bottom:22px;">
-      <div class="coin">$</div>
+      <img class="brand-icon" src="icons/dice-mark-amber.png" alt="">
       <div class="wordmark">BANK OR BUST</div>
     </div>
     <div class="setup-title">New match</div>
