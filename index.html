@@ -311,6 +311,17 @@
     display:flex; align-items:center; justify-content:center;
     font-size:56px; color:var(--ink); line-height:1;
   }
+  .roll-result-num{
+    font-size: 72px; font-weight: 700; font-family:'Space Mono', monospace;
+    line-height: 1; letter-spacing: -2px; text-align:center;
+    background: linear-gradient(180deg, #ffffff 15%, #ffd79a 92%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-shadow: 0 2px 0 rgba(0,0,0,.28);
+  }
+  .roll-result-doubles{
+    text-align:center; color:var(--accent); font-weight:800; font-size:14px;
+    letter-spacing:.05em; text-transform:uppercase; margin-top:-8px;
+  }
 
   .decision-row{ display:flex; gap:12px; }
   .decision-row .btn{ flex:1; }
@@ -1013,10 +1024,11 @@ function padGridHtml(onRoll){
 function virtualDiceHtml(onRoll){
   return `
   <div class="dice-roller">
-    <div class="dice-pair">
+    <div class="dice-pair" id="dice-pair">
       <div class="die-face" id="die-1">⚀</div>
       <div class="die-face" id="die-2">⚀</div>
     </div>
+    <div class="roll-result-num" id="roll-result-num" style="display:none;"></div>
     <button class="btn btn-primary" style="width:100%" data-action="virtual-roll" data-arg="${onRoll}">Roll dice</button>
   </div>`;
 }
@@ -1030,6 +1042,8 @@ function rollTwoDice(){
 function animateDiceRoll(onRoll){
   const die1 = document.getElementById('die-1');
   const die2 = document.getElementById('die-2');
+  const dicePair = document.getElementById('dice-pair');
+  const resultNum = document.getElementById('roll-result-num');
   const btn = document.querySelector('[data-action="virtual-roll"]');
   if(!die1 || !die2) return;
   if(btn) btn.disabled = true;
@@ -1045,12 +1059,24 @@ function animateDiceRoll(onRoll){
       die2.textContent = DIE_GLYPHS[roll.d2];
       setTimeout(() => {
         const phase = upcomingPhase();
-        const val = (phase === 'risk' && roll.isDoubles) ? 'doubles' : roll.sum;
-        if(onRoll === 'enter-roll'){
-          performSoloRoll(val);
-        } else {
-          roomApplyRoll(val);
+        const isDoublesInPlay = phase === 'risk' && roll.isDoubles;
+        const val = isDoublesInPlay ? 'doubles' : roll.sum;
+        // reveal a large, clear readout of what was rolled and hold it for 3s so the
+        // group can register it before it's applied -- in room mode this also means
+        // the 5s bank-decide timer (started inside roomApplyRoll) can't begin until
+        // after this reveal finishes, since roomApplyRoll isn't called until then
+        if(dicePair) dicePair.style.display = 'none';
+        if(resultNum){
+          resultNum.style.display = 'block';
+          resultNum.innerHTML = String(roll.sum) + (isDoublesInPlay ? `<div class="roll-result-doubles">Doubles ×2</div>` : '');
         }
+        setTimeout(() => {
+          if(onRoll === 'enter-roll'){
+            performSoloRoll(val);
+          } else {
+            roomApplyRoll(val);
+          }
+        }, 3000);
       }, 400);
     }
   }, 70);
