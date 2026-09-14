@@ -367,9 +367,26 @@
   .champion-block .csub{ color:var(--text-dim); font-size:13px; margin-top:4px; font-weight:600; }
 
   ::selection{ background: var(--accent); color:var(--ink); }
+
+  /* ---------- splash screen ---------- */
+  #splash{
+    position:fixed; inset:0; z-index:999;
+    background: radial-gradient(120% 70% at 50% -8%, #1d3444 0%, var(--bg) 52%, var(--bg-2) 100%);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:22px; transition: opacity .25s ease;
+  }
+  #splash.hide{ opacity:0; pointer-events:none; }
+  #splash img{ width:min(78vw, 320px); height:auto; border-radius:20px; }
+  #splash .splash-bar-wrap{ width:min(60vw, 220px); height:6px; border-radius:99px; background:rgba(255,255,255,.08); overflow:hidden; }
+  #splash .splash-bar{ height:100%; width:0%; border-radius:99px; background:linear-gradient(90deg,var(--accent-hi),var(--accent-lo)); animation: splashFill 1.1s ease forwards; }
+  @keyframes splashFill{ from{ width:0%; } to{ width:100%; } }
 </style>
 </head>
 <body>
+<div id="splash">
+  <img src="icons/social-share-1200.png" alt="Bank or Bust">
+  <div class="splash-bar-wrap"><div class="splash-bar"></div></div>
+</div>
 <div id="app"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -1527,6 +1544,13 @@ document.getElementById('app').addEventListener('keydown', (e) => {
 
 restoreFromSave();
 render();
+
+setTimeout(() => {
+  const splash = document.getElementById('splash');
+  if(!splash) return;
+  splash.classList.add('hide');
+  setTimeout(() => splash.remove(), 300);
+}, 1100);
 </script>
 </body>
 </html>
