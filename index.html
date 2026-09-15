@@ -451,10 +451,26 @@ function getSupabaseClient(){
 
 function newPlayerName(v){ return v.trim(); }
 
+// best-effort usage log (no PII) -- also doubles as real Supabase activity, which
+// keeps the free-tier project from auto-pausing far more honestly than a synthetic
+// ping. Never blocks or breaks the game: if Supabase isn't configured or the insert
+// fails for any reason, this silently does nothing.
+function logMatchStart(){
+  const client = getSupabaseClient();
+  if(!client) return;
+  client.from('match_log').insert({
+    player_names: S.playerNames,
+    rounds_per_game: S.settings.roundsPerGame,
+    games_in_match: S.settings.gamesInMatch,
+    room_mode: S.settings.roomMode
+  }).then(() => {}, () => {});
+}
+
 /* ============================= GAME HELPERS ============================= */
 function startMatch(){
   S.players = S.playerNames.map(n => ({ name:n, matchPoints:0, gameScore:0 }));
   S.match = { gameIndex: 0, history: [] };
+  logMatchStart();
   if(S.settings.roomMode && ROOM_SYNC_ENABLED){
     hostCreateRoom();
   }

@@ -1,0 +1,16 @@
+name: Supabase keep-alive
+
+on:
+  schedule:
+    - cron: '0 12 */3 * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST endpoint to prevent free-tier auto-pause
+        run: |
+          curl -sS -o /dev/null -w "HTTP %{http_code}\n" \
+            "https://oqydgtkfdlrysftlhgrs.supabase.co/rest/v1/" \
+            -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9xeWRndGtmZGxyeXNmdGxoZ3JzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3MjY1MzQsImV4cCI6MjEwNDMwMjUzNH0.IM0swQQSyCFU2cTRGOcofv3RoqsVTx72n2e0kDj3jDc"
